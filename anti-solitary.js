@@ -20,7 +20,7 @@ registerPlugin({
 		placeholder: '30'
 	}, {
 		name: 'kickChan',
-		title: 'Upgrade move to a kick from channel.',
+		title: 'Upgrade move to a kick from channel',
 		type: 'checkbox'
 	}, {
 		name: 'moveToChan',
@@ -67,8 +67,16 @@ registerPlugin({
 			type: 'channel'
 		}, {
 			name: 'inclSubChannel',
-			title: 'Include all sub-channel [ just one level deeper >> NO "sub-sub"-channel! ]',
+			title: 'Include all sub-channel ([) just one level deeper >> NO "sub-sub"-channel! )',
 			type: 'checkbox'
+		}, {
+			name: 'inclSubSubChannel',
+			title: '+ one more level ( "sub-sub"-channel )',
+			type: 'checkbox',
+			indent: 1,
+			conditions: [
+				{ field: 'inclSubChannel', value: true }
+			]
 		}]
 	}]
 }, (_, config, meta) => {
@@ -78,7 +86,7 @@ registerPlugin({
 
 	// Check if values are set properly
 	if (typeof config.soliTime == 'undefined' || !config.soliTime) config.soliTime = 30;
-	else if (config.soliTime < 1) config.soliTime = 1;
+	else if (config.soliTime < 5) config.soliTime = 5;
 	if (typeof config.checkTime == 'undefined' || !config.checkTime) config.checkTime = 30;
 	else if (config.checkTime < 5) config.checkTime = 5;
 	if (typeof config.checkChannelHow == 'undefined' || !config.checkChannelHow) config.checkChannelHow = 0;
@@ -216,6 +224,7 @@ registerPlugin({
 		})
 		ready = true;
 		setInterval(CheckTime, INTERVAL * 1000);
+		setInterval(InitLists, SOLITIME * 20000);		// Re-fetching the channel structure at 3x per solitary time
 	}
 /**
  * Get Channel White-/Blacklist
@@ -249,10 +258,12 @@ registerPlugin({
 						let array = getSubchannels(config.checkChannelList[i].chan);
 						array.forEach((channel) => {
 							// sub sub channel
-							let subarray = getSubchannels(channel.id());
-							subarray.forEach((subchannel) => {
-								igCh.push(subchannel.id());
-							})
+							if (config.checkChannelList[i].inclSubSubChannel) {
+								let subarray = getSubchannels(channel.id());
+								subarray.forEach((subchannel) => {
+									igCh.push(subchannel.id());
+								})
+							}
 							igCh.push(channel.id());
 						})
 					}
@@ -266,10 +277,12 @@ registerPlugin({
 						let array = getSubchannels(config.checkChannelList[i].chan);
 						array.forEach((channel) => {
 							// sub sub channel
-							let subarray = getSubchannels(channel.id());
-							subarray.forEach((subchannel) => {
-								chCh.push(subchannel.id());
-							})
+							if (config.checkChannelList[i].inclSubSubChannel) {
+								let subarray = getSubchannels(channel.id());
+								subarray.forEach((subchannel) => {
+									chCh.push(subchannel.id());
+								})
+							}
 							chCh.push(channel.id());
 						})
 					}
@@ -365,18 +378,5 @@ registerPlugin({
 			}
 		}
 		return result;
-	}
-
-	function getSubArray() {
-		let AllChannel = backend.getChannels();
-		let result = [];
-		let channel = [];
-		let parents = [];
-		for (var i = 0; i < AllChannel.length; i++) {
-			channel.push(AllChannel[i].id());
-			let currentParent = AllChannel[i].parent();
-			parents.push(currentParent);
-		}
-		result.push(channel, parents);
 	}
 });
