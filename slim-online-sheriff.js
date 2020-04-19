@@ -32,7 +32,7 @@ registerPlugin({
 	function checkConnection() {
 		if (!backend.isConnected()) {
 			backend.disconnect();
-			setTimeout(backend.connect, 5000);
+			setTimeout(backend.connect(), 5000);
 			engine.log("S-O-S >> Forcing reconnect, since instance was offline.");
 		}
 	}
