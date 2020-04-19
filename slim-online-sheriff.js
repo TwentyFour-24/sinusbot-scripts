@@ -15,11 +15,20 @@ registerPlugin({
 	const backend = require('backend')
 	const event = require('event')
 
-	event.on('load', checkConnection)
+	/** 
+	 * Check online status on (re-)load and disconnect
+	*/
+	event.on('load', (_) => {
+		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
+		checkConnection;
+	})
 	event.on('disconnect', checkConnection)
 
 	if (config.auto) setInterval(checkConnection, 6e4);
 
+	/**
+	 * Checks if offline, if so, reconnects 5s later
+	 */
 	function checkConnection() {
 		if (!backend.isConnected()) {
 			backend.disconnect();
