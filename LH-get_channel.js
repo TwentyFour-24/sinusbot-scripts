@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Little Helpers: Get Channel-ID',
-	version: '1.0.0',
+	version: '1.0.1',
 	engine: '>= 1.0.0',
 	description: 'Sends you the channel-ID in private, when you move the bot into a channel.',
 	author: 'TwentyFour'
