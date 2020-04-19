@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Slim-Online-Sheriff',
-	version: '1.0.3',
+	version: '1.0.4',
 	engine: '>= 1.0.0',
 	description: 'Forces instances to connect once on load/disconnect, or optionally ensures it periodically.',
 	author: 'TwentyFour',
@@ -10,7 +10,7 @@ registerPlugin({
 		title: 'Verify connectivity each minute as well',
 		type: 'checkbox'
 	}]
-}, (_, config) => {
+}, (_, config, meta) => {
 	const engine = require('engine')
 	const backend = require('backend')
 	const event = require('event')
@@ -20,11 +20,11 @@ registerPlugin({
 	*/
 	event.on('load', (_) => {
 		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
-		checkConnection;
+		checkConnection();
 	})
 	event.on('disconnect', checkConnection)
 
-	if (config.auto) setInterval(checkConnection, 6e4);
+	if (config.auto) setInterval(checkConnection, 60000);
 
 	/**
 	 * Checks if offline, if so, reconnects 5s later
@@ -32,7 +32,7 @@ registerPlugin({
 	function checkConnection() {
 		if (!backend.isConnected()) {
 			backend.disconnect();
-			setTimeout(backend.connect(), 5e3);
+			setTimeout(backend.connect, 5000);
 			engine.log("S-O-S >> Forcing reconnect, since instance was offline.");
 		}
 	}
