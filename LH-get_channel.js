@@ -3,12 +3,7 @@ registerPlugin({
 	version: '1.0.0',
 	engine: '>= 1.0.0',
 	description: 'Sends you the channel-ID in private, when you move the bot into a channel.',
-	author: 'TwentyFour',
-	vars: [{
-		name: 'ok',
-		title: '>> Nothing to config here <<',
-		type: 'checkbox'
-	}]
+	author: 'TwentyFour'
 }, (_, config, meta) => {
 	const backend = require('backend')
 	const engine = require('engine')
