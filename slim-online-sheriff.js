@@ -15,7 +15,10 @@ registerPlugin({
 	const backend = require('backend')
 	const event = require('event')
 
-	event.on('load', checkConnection)
+	event.on('load', (_) => {
+		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
+		checkConnection
+	})
 	event.on('disconnect', checkConnection)
 
 	if (config.auto) setInterval(checkConnection, 6e4);
