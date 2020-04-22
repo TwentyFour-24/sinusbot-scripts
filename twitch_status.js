@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b10',
+	version: '2.0.0-b11',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -23,6 +23,7 @@ registerPlugin({
 		title: 'Latency between each API requests: [in ms]',
 		type: 'number',
 		placeholder: 100,
+		default: 100,
 		conditions: [
 			{ field: 'dev_menu', value: true }
 		]
@@ -32,6 +33,7 @@ registerPlugin({
 		title: 'Timeout threshold for API requests: [in ms]',
 		type: 'number',
 		placeholder: 5000,
+		default: 5000,
 		conditions: [
 			{ field: 'dev_menu', value: true }
 		]
@@ -47,7 +49,8 @@ registerPlugin({
 		name: "interval",
 		title: 'Data refresh interval: [in min] >> Do NOT set it too low, else you might get banned by the API provider!',
 		type: 'number',
-		placeholder: 5
+		placeholder: 5,
+		default: 5
 	}, {
 		name: 'EnableBTTV',
 		title: 'Enable grabbing of BTTV emotes >> disabled by default',
@@ -65,7 +68,7 @@ registerPlugin({
 		indent: 1,
 		title: 'Servergroup-ID for (-LIVE-) streamers:',
 		type: 'number',
-		placeholder: 99,
+		placeholder: 6,
 		conditions: [
 			{ field: 'StreamerGrActive', value: true }
 		]
@@ -212,12 +215,9 @@ registerPlugin({
 		}
 	}
 	// Check if values are set properly
-	if (typeof config.interval == 'undefined' || !config.interval) config.interval = 5;
-	else if (config.interval < 1) config.interval = 1;
-	if (typeof config.dev_latency == 'undefined' || !config.dev_latency || !config.dev_menu) config.dev_latency = 100;
-	else if (config.dev_latency < 0) config.dev_latency = 0;
-	if (typeof config.dev_timeout == 'undefined' || !config.dev_timeout || !config.dev_menu) config.dev_timeout = 5000;
-	else if (config.dev_timeout < 1000) config.dev_timeout = 1000;
+	if (config.interval < 1) config.interval = 1;
+	if (config.dev_latency < 0) config.dev_latency = 0;
+	if (config.dev_timeout < 1000) config.dev_timeout = 1000;
 	if (!config.dev_menu) config.dev_debug = false;
 
 	const INTERVAL = Math.floor(config.interval);
@@ -322,11 +322,17 @@ event.on('chat', function (ev) {
 		key_value.e_log = E_LOG;
 
 		API_Users(key_value)
+		.then(sleeper(LATENCY))
 		.then(key_result => API_Followers(key_result))
+		.then(sleeper(LATENCY))
 		.then(key_result => API_Streams(key_result))
+		.then(sleeper(LATENCY))
 		.then(key_result => API_Games(key_result))
+		.then(sleeper(LATENCY))
 		.then(key_result => API_SubEmotes(key_result, key_value.firstRun))
+		.then(sleeper(LATENCY))
 		.then(key_result => API_BetterEmotes(key_result, key_value.firstRun))
+		.then(sleeper(LATENCY))
 		.then(key_result => {
 			key_result.firstRun = false;
 
@@ -339,7 +345,7 @@ event.on('chat', function (ev) {
 			if (DEBUG || !noError) engine.log(`ERROR Log for ${key_value.TTvChannelname}: ${JSON.stringify(e_log)}`);
 
 			store.setInstance(key_name, key_result);
-			setTimeout(UpdateChannel(key_name), LATENCY * 2);
+			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
 		});
 	}
 	/**
@@ -583,23 +589,24 @@ event.on('chat', function (ev) {
 				// ERRORS
 				if (response == undefined) {
 					key_value.e_log[0].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[0].status = response.statusCode;
 				if (response.statusCode != 200) {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
 				key_value.e_log[0].error = data.error;
 				if (data.error == "Unauthorized") {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.TTvUsersData = data;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Twitch User Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -620,23 +627,24 @@ event.on('chat', function (ev) {
 				// ERRORS
 				if (response == undefined) {
 					key_value.e_log[1].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[1].status = response.statusCode;
 				if (response.statusCode != 200) {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
 				key_value.e_log[1].error = data.error;
 				if (data.error == "Unauthorized") {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.TTvFollowerData = data;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Follower Count Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -656,23 +664,24 @@ event.on('chat', function (ev) {
 				// ERRORS
 				if (response == undefined) {
 					key_value.e_log[2].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[2].status = response.statusCode;
 				if (response.statusCode != 200) {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
 				key_value.e_log[2].error = data.error;
 				if (data.error == "Unauthorized") {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.TTvStreamData = data;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Stream Channel Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -685,7 +694,7 @@ event.on('chat', function (ev) {
 			if (key_value.TTvStreamData.data[0] == undefined) {
 				key_value.e_log[3].status = 200;
 				key_value.e_log[3].error = 'Stream offline >> no game';
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
@@ -699,23 +708,24 @@ event.on('chat', function (ev) {
 				// ERRORS
 				if (response == undefined) {
 					key_value.e_log[3].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[3].status = response.statusCode;
 				if (response.statusCode != 200) {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
 				key_value.e_log[3].error = data.error;
 				if (data.error == "Unauthorized") {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.TTvGameData = data;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Game Name Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -729,7 +739,7 @@ event.on('chat', function (ev) {
 			if (firstRun && !config.instantEmotes) {
 				key_value.e_log[4].status = 200;
 				key_value.e_log[4].error = 'First run >> no SUB-Emotes';
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
@@ -744,19 +754,19 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				if (response == undefined) {
 					key_value.e_log[4].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[4].status = response.statusCode;
 				if (response.statusCode != 200) {
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
 				key_value.e_log[4].error = data.error;
 				if (data.error == "Channel not found") {
 					if (DEBUG) engine.log(`API error: SUB emotes for channel ${ch_name} not found!`);
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				for (var i = 0; i < data.emotes.length; i++) {
@@ -766,7 +776,8 @@ event.on('chat', function (ev) {
 				if (emotes.length > 0) subemotes = emotes;
 				key_value.Subemotes = subemotes;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> SUB Emote Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -780,7 +791,7 @@ event.on('chat', function (ev) {
 			if ((firstRun && !config.instantEmotes) || !config.EnableBTTV) {
 				key_value.e_log[5].status = 200;
 				key_value.e_log[5].error = 'First run or disabled >> no BTTV-Emotes';
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
@@ -793,13 +804,13 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				if (response == undefined) {
 					key_value.e_log[5].error = 'Failed - no response';
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				key_value.e_log[5].status = response.statusCode;
 				if (response.statusCode == 404) {
 					if (DEBUG) engine.log(`API error: BTTV emotes for channel ${ch_name} not found!`);
-					setTimeout(resolve(key_value), LATENCY);
+					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data);
@@ -809,7 +820,8 @@ event.on('chat', function (ev) {
 				if (data.emotes.length > 0) Betteremotes = emotesBetter;
 				key_value.Betteremotes = Betteremotes;
 				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> BTTV Emote Data... DONE!`);
-				setTimeout(resolve(key_value), LATENCY);
+				resolve(key_value);
+				return;
 			});
 		})
 	}
@@ -878,6 +890,11 @@ event.on('chat', function (ev) {
 			})
 		if(clientsGroups.indexOf(groupId) > -1) return true;
 		return false;
+	}
+	function sleeper(ms) {
+		return function(x) {
+			return new Promise(resolve => setTimeout(() => resolve(x), ms));
+		};
 	}
 
 	var TwitchStatus = /** @class */ (function () {

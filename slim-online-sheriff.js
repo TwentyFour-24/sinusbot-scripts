@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Slim-Online-Sheriff',
-	version: '1.0.4',
+	version: '1.0.5',
 	engine: '>= 1.0.0',
 	description: 'Forces instances to connect once on load/disconnect, or optionally ensures it periodically.',
 	author: 'TwentyFour',
@@ -32,7 +32,7 @@ registerPlugin({
 	function checkConnection() {
 		if (!backend.isConnected()) {
 			backend.disconnect();
-			setTimeout(backend.connect(), 5000);
+			setTimeout(() => backend.connect(), 5000);
 			engine.log("S-O-S >> Forcing reconnect, since instance was offline.");
 		}
 	}
