@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Anti-Solitary-Clients',
-	version: '1.1.1',
+	version: '1.1.2',
 	engine: '>= 1.0.0',
 	description: 'Move or punish solitary clients ( being alone in a channel ) after a specific time.',
 	author: 'TwentyFour',
@@ -10,14 +10,16 @@ registerPlugin({
 		type: 'checkbox'
 	},{
 		name: 'soliTime',
-		title: 'Duration of max. allowed solitary time: [ in min ]',
+		title: 'Duration of max. allowed solitary time: [ in min // lower limit = 1 min]',
 		type: 'number',
-		placeholder: '30'
+		placeholder: 10,
+		default: 10
 	}, {
 		name: 'checkTime',
-		title: 'Interval of performing actions: [ in s ]',
+		title: 'Interval of performing actions: [ in s // lower limit = 5s ]',
 		type: 'number',
-		placeholder: '30'
+		placeholder: 30,
+		default: 30
 	}, {
 		name: 'kickChan',
 		title: 'Upgrade move to a kick from channel',
@@ -33,6 +35,8 @@ registerPlugin({
 		name: 'kickMsg',
 		title: 'Enter the kick message:',
 		type: 'string',
+		placeholder: 'Don\'t idle solo!',
+		default: 'Don\'t idle solo!',
 		conditions: [
 			{ field: 'kickChan', value: true }
 		]
@@ -51,6 +55,7 @@ registerPlugin({
 		name: 'checkChannelHow',
 		title: 'Choose mode to check which channel:',
 		type: 'select',
+		default: "0",
 		options: [
 			'Total-Mode >> Check ALL channel',
 			'Whitelist-Mode >> ALL - but the selected',
@@ -85,11 +90,8 @@ registerPlugin({
 	const event = require('event')
 
 	// Check if values are set properly
-	if (typeof config.soliTime == 'undefined' || !config.soliTime) config.soliTime = 30;
-	else if (config.soliTime < 5) config.soliTime = 5;
-	if (typeof config.checkTime == 'undefined' || !config.checkTime) config.checkTime = 30;
-	else if (config.checkTime < 5) config.checkTime = 5;
-	if (typeof config.checkChannelHow == 'undefined' || !config.checkChannelHow) config.checkChannelHow = 0;
+	if (config.soliTime < 1) config.soliTime = 1;
+	if (config.checkTime < 5) config.checkTime = 5;
 	
 	const DEBUG = config.dev_debug;
 	const SOLITIME = config.soliTime;
@@ -224,7 +226,7 @@ registerPlugin({
 		})
 		ready = true;
 		setInterval(CheckTime, INTERVAL * 1000);
-		setInterval(InitLists, SOLITIME * 20000);		// Re-fetching the channel structure at 3x per solitary time
+		setInterval(InitLists, SOLITIME * 30000);		// Re-fetching the channel structure twice per solitary time interval
 	}
 /**
  * Get Channel White-/Blacklist
