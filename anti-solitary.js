@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Anti-Solitary-Clients',
-	version: '1.1.0',
+	version: '1.1.1',
 	engine: '>= 1.0.0',
 	description: 'Move or punish solitary clients ( being alone in a channel ) after a specific time.',
 	author: 'TwentyFour',
@@ -111,7 +111,7 @@ registerPlugin({
  */
 	event.on('load', (_) => {
 		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
-		setTimeout(Init(), 5000);
+		setTimeout(Init, 5000);
 	})
 /**
  * Get new data after connection loss
