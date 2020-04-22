@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b11',
+	version: '2.0.0-b12',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -82,6 +82,7 @@ registerPlugin({
 		title: 'Customize server message: (%Streamer, %Game, %URL)',
 		type: 'string',
 		placeholder: '%Streamer (%Game) is online! Check out %URL and follow!',
+		default: '%Streamer (%Game) is online! Check out %URL and follow!',
 		conditions: [
 			{ field: 'ServerMsgActive', value: true }
 		]
@@ -130,7 +131,8 @@ registerPlugin({
 			name: 'StreamerUID',
 			indent: 1,
 			title: 'Corresponding TeamSpeak-UUID: (can be left blank, if option is disabled)',
-			type: 'string'
+			type: 'string',
+			default: '0'
 		}, {
 			name: 'OutputChannel',
 			indent: 1,
@@ -141,12 +143,14 @@ registerPlugin({
 			indent: 1,
 			title: 'Channel description: (%Streamer, %Pic ([img] not required), %Title, %Game, %Uptime, %Link (BB-Tag included), %URL, %Follower, %Viewer, %Status, %Emotes, %Betteremotes, %Logo ([img] not required))',
 			type: 'multiline',
-			placeholder: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Followers:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'
+			placeholder: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Followers:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes',
+			default: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Follower:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'
 		}, {
 			name: 'PictureSize',
 			indent: 1,
 			title: 'Size of stream preview picture:',
 			type: 'select',
+			default: "1",
 			options: [
 				'80x45',
 				'320x180',
@@ -159,6 +163,7 @@ registerPlugin({
 			title: 'Width: [in px]',
 			type: 'string',
 			placeholder: '400',
+			default: '400',
 			conditions: [
 				{ field: 'PictureSize', value: 3 }
 			]
@@ -168,6 +173,7 @@ registerPlugin({
 			title: 'Height: [in px]',
 			type: 'string',
 			placeholder: '225',
+			default: '225',
 			conditions: [
 				{ field: 'PictureSize', value: 3 }
 			]
@@ -181,13 +187,15 @@ registerPlugin({
 			indent: 1,
 			title: 'Offline channel name: (%Streamer)',
 			type: 'string',
-			placeholder: '%Streamer is offline.'
+			placeholder: '%Streamer is offline.',
+			default: '%Streamer is offline.'
 		}, {
 			name: 'OnlineText',
 			indent: 1,
 			title: 'Online channel name: (%Streamer, %Viewer, %Game)',
 			type: 'string',
-			placeholder: '%Streamer (%Game) is online!'
+			placeholder: '%Streamer (%Game) is online!',
+			default: '%Streamer (%Game) is online!'
 		}, {
 			name: 'UpdateDisableOnline',
 			indent: 1,
@@ -244,29 +252,16 @@ registerPlugin({
 			if (SUCCESS) engine.log('Successfully deleted cache!');
 			else engine.log('Failed to delete cache!');	
 		}
-
-		// Check if main settings are correct
-		if (typeof config.ServerMsgContent == 'undefined' || !config.ServerMsgContent) config.ServerMsgContent = '%Streamer (%Game) is online! Check out %URL and follow!';
-
 		// Check individual channel settings
 		for (var i = 0; i < config.indi.length; i++) {
 			if (typeof config.indi[i].Streamername == 'undefined' || !config.indi[i].Streamername) {
 				engine.log(`ERROR: No streamer name set by field ${i + 1}`);
 				continue;
 			}
-			if (typeof config.indi[i].StreamerUID == 'undefined' || !config.indi[i].StreamerUID) config.indi[i].StreamerUID = "0";
-
 			if (typeof config.indi[i].OutputChannel == 'undefined' || !config.indi[i].OutputChannel) {
 				engine.log(`ERROR: No streamer output channel by field ${i + 1}`);
 				continue;
 			}
-			if (typeof config.indi[i].description == 'undefined' || !config.indi[i].description) config.indi[i].description = '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Follower:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes';
-			if (typeof config.indi[i].OfflineText == 'undefined' || !config.indi[i].OfflineText) config.indi[i].OfflineText = '%Streamer is offline.';
-			if (typeof config.indi[i].OnlineText == 'undefined' || !config.indi[i].OnlineText) config.indi[i].OnlineText = '%Streamer (%Game) is online!';
-			if (typeof config.indi[i].PictureSize == 'undefined' || !config.indi[i].PictureSize) config.indi[i].PictureSize = "1";
-			if (typeof config.indi[i].PictureWidth == 'undefined' || !config.indi[i].PictureWidth) config.indi[i].PictureWidth = '400';
-			if (typeof config.indi[i].PictureHeight == 'undefined' || !config.indi[i].PictureHeight) config.indi[i].PictureHeight = '225';
-
 			var storeTTv = new TwitchStatus();
 			storeTTv.TTvChannelname = `${config.indi[i].Streamername}`;
 			storeTTv.StreamerUID = config.indi[i].StreamerUID;
@@ -285,7 +280,7 @@ registerPlugin({
 			store.setInstance("TTvData_" + i, storeTTv);
 		}
 		// Delay the initial run and start recurring cycle
-		if (DEBUG) engine.log('Initial Run...');
+		if (DEBUG) engine.log('Initial Run in 5s...');
 		setTimeout(Run, 5000);
 		setInterval(Run, INTERVAL * 60000);
 	}
@@ -295,7 +290,7 @@ registerPlugin({
 	if (ev.text == "auth") Auth();
 });
 event.on('chat', function (ev) {
-	if (ev.text == "valid") Valid();
+	if (ev.text == "valid") Validate();
 });*/
 //	#####################  Debug Functions  #####################
 
@@ -311,7 +306,7 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Cycle once through all APIs and save their data
-	 * @param {string} key_name 	stored key string of a "Channel"
+	 * @param {string} key_name		stored key string of a "Channel"
 	 */
 	function FetchData(key_name) {
 		let READY = true;
@@ -350,7 +345,7 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Edit a single channel's name & description
-	 * @param {string} key_name 	of the key where to store fetched API data
+	 * @param {string} key_name		of the key where to store fetched API data
 	 */
 	function UpdateChannel(key_name) {
 		if (!backend.isConnected()) return;
@@ -575,7 +570,7 @@ event.on('chat', function (ev) {
 //	###########################################  API-Functions  ###########################################
 	/**
 	 * Download the basic JSON data for the channel
-	 * @param {Object} key_value 	stored object
+	 * @param {Object} key_value	stored object
 	 */
 	function API_Users(key_value) {
 		return new Promise((resolve, reject) => {
@@ -612,7 +607,7 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Download the current follower count
-	 * @param {Object} key_value 	stored object
+	 * @param {Object} key_value	stored object
 	 */
 	function API_Followers(key_value) {
 		return new Promise((resolve, reject) => {
@@ -650,7 +645,7 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Fetch stream details (only for LIVE streams)
-	 * @param {Object} key_value 	stored object
+	 * @param {Object} key_value	stored object
 	 */
 	function API_Streams(key_value) {
 		return new Promise((resolve, reject) => {
@@ -687,7 +682,7 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Fetch game names through game IDs
-	 * @param {Object} key_value 	stored object
+	 * @param {Object} key_value	stored object
 	 */
 	function API_Games(key_value) {
 		return new Promise((resolve, reject) => {
@@ -731,8 +726,8 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Fetch subscriber emotes
-	 * @param {Object} key_value 	stored object
-	 * @param {boolean} firstRun 	initial download?
+	 * @param {Object} key_value	stored object
+	 * @param {boolean} firstRun	initial download?
 	 */
 	function API_SubEmotes(key_value, firstRun) {
 		return new Promise((resolve, reject) => {
@@ -783,8 +778,8 @@ event.on('chat', function (ev) {
 	}
 	/**
 	 * Fetch BetterTTV emotes
-	 * @param {Object} key_value 	stored object
-	 * @param {boolean} firstRun 	initial download?
+	 * @param {Object} key_value	stored object
+	 * @param {boolean} firstRun	initial download?
 	 */
 	function API_BetterEmotes(key_value, firstRun) {
 		return new Promise((resolve, reject) => {
@@ -848,7 +843,7 @@ event.on('chat', function (ev) {
 	/**
 	 * Twitch-API token validation
 	 */
-	function Valid() {
+	function Validate() {
 		http.simpleRequest({
 			method: "GET",
 			url: "https://id.twitch.tv/oauth2/validate",
@@ -879,8 +874,8 @@ event.on('chat', function (ev) {
 
 	/**
 	 * Auxiliary function to check for a servergroup
-	 * @param {Client} client to be checked
-	 * @param {string} groupId to check for
+	 * @param {Client} client	to be checked
+	 * @param {string} groupId	to check for
 	 */
 	function hasServerGroupWithId(client, groupId) {
 		let clientsGroups = [];
@@ -891,6 +886,10 @@ event.on('chat', function (ev) {
 		if(clientsGroups.indexOf(groupId) > -1) return true;
 		return false;
 	}
+	/**
+	 * Delays a promise
+	 * @param {number} ms	wait time in milliseconds
+	 */
 	function sleeper(ms) {
 		return function(x) {
 			return new Promise(resolve => setTimeout(() => resolve(x), ms));
