@@ -430,8 +430,8 @@ event.on('chat', function (ev) {
 			// LIVE-Group:  Checking if still has LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (hasServerGroupWithId(user, config.StreamerGrID.toString())) {
-						user.removeFromServerGroup(config.StreamerGrID.toString());
+					if (hasServerGroupWithId(user, config.StreamerGrID)) {
+						user.removeFromServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
 					}
 					else {
@@ -505,8 +505,8 @@ event.on('chat', function (ev) {
 			// LIVE-Group:  Checking if yet missing the LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (!hasServerGroupWithId(user, config.StreamerGrID.toString())) {
-						user.addToServerGroup(config.StreamerGrID.toString());
+					if (!hasServerGroupWithId(user, config.StreamerGrID)) {
+						user.addToServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
 					}
 					else {
