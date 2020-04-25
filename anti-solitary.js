@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Anti-Solitary-Clients',
-	version: '1.1.1',
+	version: '1.2.0',
 	engine: '>= 1.0.0',
 	description: 'Move or punish solitary clients ( being alone in a channel ) after a specific time.',
 	author: 'TwentyFour',
@@ -10,14 +10,16 @@ registerPlugin({
 		type: 'checkbox'
 	},{
 		name: 'soliTime',
-		title: 'Duration of max. allowed solitary time: [ in min ]',
+		title: 'Duration of max. allowed solitary time: [ in min // lower limit = 1 min]',
 		type: 'number',
-		placeholder: '30'
+		placeholder: 10,
+		default: 10
 	}, {
 		name: 'checkTime',
-		title: 'Interval of performing actions: [ in s ]',
+		title: 'Interval of performing actions: [ in s // lower limit = 5s ]',
 		type: 'number',
-		placeholder: '30'
+		placeholder: 30,
+		default: 30
 	}, {
 		name: 'kickChan',
 		title: 'Upgrade move to a kick from channel',
@@ -33,6 +35,9 @@ registerPlugin({
 		name: 'kickMsg',
 		title: 'Enter the kick message:',
 		type: 'string',
+		indent: 1,
+		placeholder: 'Don\'t idle solo!',
+		default: 'Don\'t idle solo!',
 		conditions: [
 			{ field: 'kickChan', value: true }
 		]
@@ -40,19 +45,46 @@ registerPlugin({
 		name: 'kickServ',
 		title: 'Increase to a kick from server!',
 		type: 'checkbox',
+		indent: 1,
 		conditions: [
 			{ field: 'kickChan', value: true }
 		]
 	}, {
 		name: 'ignoreGroups',
-		title: 'Enter the whitelisted server groups:',
+		title: 'Enter whitelisted server groups: ( >> leave empty for none )',
 		type: 'strings'
+	}, {
+		name: 'mercyMode',
+		title: 'Different treatment regarding audio status:',
+		type: 'select',
+		default: "0",
+		options: [
+			'Normal-Mode >> ALL - treated equally despite audio status',
+			'Exception-Mode >> ALL - except the following audio status',
+			'Reserve-Mode >> NONE - only the following audio status'
+		]
+	}, {
+		name: 'mercyMute',
+		title: 'Consider [MUTE] ?',
+		type: 'checkbox',
+		indent: 1
+	}, {
+		name: 'mercyDeaf',
+		title: 'Consider [DEAF] ?',
+		type: 'checkbox',
+		indent: 1
+	}, {
+		name: 'mercyAway',
+		title: 'Consider [AWAY] ?',
+		type: 'checkbox',
+		indent: 1
 	}, {
 		name: 'checkChannelHow',
 		title: 'Choose mode to check which channel:',
 		type: 'select',
+		default: "0",
 		options: [
-			'Total-Mode >> Check ALL channel',
+			'Normal-Mode >> Check ALL channel',
 			'Whitelist-Mode >> ALL - but the selected',
 			'Blacklist-Mode >> NONE - besides the selected'
 		]
@@ -67,7 +99,7 @@ registerPlugin({
 			type: 'channel'
 		}, {
 			name: 'inclSubChannel',
-			title: 'Include all sub-channel ([) just one level deeper >> NO "sub-sub"-channel! )',
+			title: 'Include all sub-channel ( just one level deeper >> NO "sub-sub"-channel! )',
 			type: 'checkbox'
 		}, {
 			name: 'inclSubSubChannel',
@@ -78,6 +110,38 @@ registerPlugin({
 				{ field: 'inclSubChannel', value: true }
 			]
 		}]
+	}, {
+		name: 'punishWithGroup',
+		title: 'Additonally assign a "punish"-servergroup?',
+		type: 'checkbox'
+	}, {
+		name: 'punishNrIncidents',
+		title: 'Amount of allowed incidents: [ 0 = on the first delict ]',
+		type: 'number',
+		placeholder: 0,
+		default: 0,
+		indent: 1,
+		conditions: [
+			{ field: 'punishWithGroup', value: true }
+		]
+	}, {
+		name: 'punishTimeIncidents',
+		title: 'Interval duration of these amount: [ in min // -1 until relog ]',
+		type: 'number',
+		placeholder: -1,
+		default: -1,
+		indent: 1,
+		conditions: [
+			{ field: 'punishWithGroup', value: true }
+		]
+	}, {
+		name: 'punishGroup',
+		title: 'Server group ID:',
+		type: 'number',
+		indent: 1,
+		conditions: [
+			{ field: 'punishWithGroup', value: true }
+		]
 	}]
 }, (_, config, meta) => {
 	const backend = require('backend')
@@ -85,19 +149,23 @@ registerPlugin({
 	const event = require('event')
 
 	// Check if values are set properly
-	if (typeof config.soliTime == 'undefined' || !config.soliTime) config.soliTime = 30;
-	else if (config.soliTime < 5) config.soliTime = 5;
-	if (typeof config.checkTime == 'undefined' || !config.checkTime) config.checkTime = 30;
-	else if (config.checkTime < 5) config.checkTime = 5;
-	if (typeof config.checkChannelHow == 'undefined' || !config.checkChannelHow) config.checkChannelHow = 0;
+	if (config.soliTime < 1) config.soliTime = 1;
+	if (config.checkTime < 5) config.checkTime = 5;
+	if (config.punishTimeIncidents < -1) config.punishTimeIncidents = -1;
+	if (config.punishNrIncidents < 0) config.punishNrIncidents = 0;
+	const checkMUTE = (typeof config.mercyMute == 'undefined') ? false : config.mercyMute;
+	const checkDEAF = (typeof config.mercyDeaf == 'undefined') ? false : config.mercyDeaf;
+	const checkAWAY = (typeof config.mercyAway == 'undefined') ? false : config.mercyAway;
 	
 	const DEBUG = config.dev_debug;
 	const SOLITIME = config.soliTime;
 	const INTERVAL = config.checkTime;
 	const MOVETO = config.moveToChan;
 	const IGNORE_MODE = parseInt(config.checkChannelHow);
+	const AUDIO_MODE = parseInt(config.mercyMode);
 	var ready = false;
 	var iso = [];
+	var incidents = [];
 	
 	var ignoreGroups = [];
 	var ignoreChannel = [];
@@ -224,7 +292,7 @@ registerPlugin({
 		})
 		ready = true;
 		setInterval(CheckTime, INTERVAL * 1000);
-		setInterval(InitLists, SOLITIME * 20000);		// Re-fetching the channel structure at 3x per solitary time
+		setInterval(InitLists, SOLITIME * 30000);		// Re-fetching the channel structure twice per solitary time interval
 	}
 /**
  * Get Channel White-/Blacklist
@@ -327,11 +395,51 @@ registerPlugin({
 	}
 /**
  * If isolated client found >> execute punishment
- * @param {string} clientUID the temporary TS-ID
+ * @param {string} clientID		the temporary TS-ID
  */
-	function TakeAction(clientUID) {
+	function TakeAction(clientID) {
 		if (!backend.isConnected()) return;
-		let user = backend.getClientByID(clientUID);
+		let user = backend.getClientByID(clientID);
+		let skip = false;
+
+		switch (AUDIO_MODE) {
+			case 0:
+				break;
+			case 1:
+				if (checkMUTE && user.isMuted()) skip = true;
+				else if (checkDEAF && user.isDeaf()) skip = true;
+				else if (checkAWAY && user.isAway()) skip = true;
+				break;
+			case 2:
+				skip = true;
+				if (checkMUTE && user.isMuted()) skip = false;
+				else if (checkDEAF && user.isDeaf()) skip = false;
+				else if (checkAWAY && user.isAway()) skip = false;
+				break;
+		}
+		if (skip) {
+			if (DEBUG) engine.log(`${meta.name} >> Ignored ${user.name()} due to configured audio status.`);
+			return;
+		}
+
+		// Store the incidence
+		if (config.punishWithGroup) {
+			let inc = incidents[clientID];
+			let count = 0;
+			if (inc !== null && inc !== undefined) count = inc.length;
+			if (config.punishNrIncidents < count+1) {
+				if (config.punishTimeIncidents == -1) addServerGroup(user, config.punishGroup);
+				else {
+					incidents[clientID] = inc.filter(date => { 
+						if ( (Date.now() - date) <= (config.punishTimeIncidents * 60000) ) return true;
+						else return false;
+					});
+					if (incidents[clientID].length >= config.punishNrIncidents) addServerGroup(user, config.punishGroup);
+				}
+			}
+			if (inc == null && inc == undefined) incidents[clientID] = [Date.now()];
+			else incidents[clientID].push(Date.now());
+		}		
 
 		// Execute 
 		if (config.kickServ) {
@@ -362,6 +470,19 @@ registerPlugin({
 			})
 		if(clientsGroups.indexOf(groupId) > -1) return true;
 		return false;
+	}
+/**
+ * Adds a server group if not already present
+ * @param {Client} client 	to add the group
+ * @param {number} groupId 	server group ID as number
+ */
+	function addServerGroup(client, groupId) {
+		if (client != undefined) {
+			if (!hasServerGroupWithId(client, groupId)) {
+				client.addToServerGroup(groupId);
+				if (DEBUG) engine.log(`${meta.name} >> Added pushish group to ${client.name()}.`);
+			}
+		}
 	}
 /**
  * Returns an array with all sub-channel objects
