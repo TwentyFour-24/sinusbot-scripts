@@ -358,8 +358,8 @@ event.on('chat', function (ev) {
 		else var user = undefined;
 
 		// Check if fetched data is present at all
-		if (key_value.TTvUsersData == "") {
-			engine.log(`ERROR: Missing data from API >> Channel ${parseInt(key_name.substr(12)) + 1}` );
+		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
+			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIPPED!`);
 			return;
 		}
 		// Check if live
@@ -574,6 +574,13 @@ event.on('chat', function (ev) {
 	 */
 	function API_Users(key_value) {
 		return new Promise((resolve, reject) => {
+			if (key_value.TTvChannelname == undefined) {
+				key_value.e_log[0].status = 404;
+				key_value.e_log[0].error = 'Channel not available >> wrong name?';
+				engine.log(`> ${ch_name} >> ${key_value.e_log[0].error}`);
+				resolve(key_value);
+				return;
+			}
 			let ch_name = key_value.TTvChannelname;
 			http.simpleRequest({
 				method: "GET",
@@ -611,7 +618,18 @@ event.on('chat', function (ev) {
 	 */
 	function API_Followers(key_value) {
 		return new Promise((resolve, reject) => {
+			if (key_value.e_log[0].status == 404) {
+				resolve(key_value);
+				return;
+			}
 			let ch_name = key_value.TTvChannelname;
+			if (key_value.TTvUsersData.data[0] == undefined) {
+				key_value.e_log[1].status = 404;
+				key_value.e_log[1].error = 'Channel is not existing >> wrong name?';
+				engine.log(`> ${ch_name} >> ${key_value.e_log[1].error}`);
+				resolve(key_value);
+				return;
+			}
 			let user_id = key_value.TTvUsersData.data[0].id;
 			http.simpleRequest({
 				method: "GET",
@@ -649,6 +667,10 @@ event.on('chat', function (ev) {
 	 */
 	function API_Streams(key_value) {
 		return new Promise((resolve, reject) => {
+			if (key_value.e_log[0].status == 404) {
+				resolve(key_value);
+				return;
+			}
 			let ch_name = key_value.TTvChannelname;
 			http.simpleRequest({
 				method: "GET",
@@ -686,13 +708,18 @@ event.on('chat', function (ev) {
 	 */
 	function API_Games(key_value) {
 		return new Promise((resolve, reject) => {
-			if (key_value.TTvStreamData.data[0] == undefined) {
-				key_value.e_log[3].status = 200;
-				key_value.e_log[3].error = 'Stream offline >> no game';
+			if (key_value.e_log[0].status == 404) {
 				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
+			if (key_value.TTvStreamData.data[0] == undefined) {
+				key_value.e_log[3].status = 200;
+				key_value.e_log[3].error = 'Channel offline >> no game!';
+				if (DEBUG) engine.log(`> ${ch_name} >> ${key_value.e_log[3].error}`);
+				resolve(key_value);
+				return;
+			}
 			let game_id = key_value.TTvStreamData.data[0].game_id;
 			http.simpleRequest({
 				method: "GET",
@@ -734,6 +761,10 @@ event.on('chat', function (ev) {
 			if (firstRun && !config.instantEmotes) {
 				key_value.e_log[4].status = 200;
 				key_value.e_log[4].error = 'First run >> no SUB-Emotes';
+				resolve(key_value);
+				return;
+			}
+			if (key_value.e_log[0].status == 404) {
 				resolve(key_value);
 				return;
 			}
@@ -786,6 +817,10 @@ event.on('chat', function (ev) {
 			if ((firstRun && !config.instantEmotes) || !config.EnableBTTV) {
 				key_value.e_log[5].status = 200;
 				key_value.e_log[5].error = 'First run or disabled >> no BTTV-Emotes';
+				resolve(key_value);
+				return;
+			}
+			if (key_value.e_log[0].status == 404) {
 				resolve(key_value);
 				return;
 			}
