@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b12',
+	version: '2.0.0-b13',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -23,7 +23,6 @@ registerPlugin({
 		title: 'Latency between each API requests: [in ms]',
 		type: 'number',
 		placeholder: 100,
-		default: 100,
 		conditions: [
 			{ field: 'dev_menu', value: true }
 		]
@@ -33,7 +32,6 @@ registerPlugin({
 		title: 'Timeout threshold for API requests: [in ms]',
 		type: 'number',
 		placeholder: 5000,
-		default: 5000,
 		conditions: [
 			{ field: 'dev_menu', value: true }
 		]
@@ -49,8 +47,7 @@ registerPlugin({
 		name: "interval",
 		title: 'Data refresh interval: [in min] >> Do NOT set it too low, else you might get banned by the API provider!',
 		type: 'number',
-		placeholder: 5,
-		default: 5
+		placeholder: 5
 	}, {
 		name: 'EnableBTTV',
 		title: 'Enable grabbing of BTTV emotes >> disabled by default',
@@ -143,8 +140,7 @@ registerPlugin({
 			indent: 1,
 			title: 'Channel description: (%Streamer, %Pic ([img] not required), %Title, %Game, %Uptime, %Link (BB-Tag included), %URL, %Follower, %Viewer, %Status, %Emotes, %Betteremotes, %Logo ([img] not required))',
 			type: 'multiline',
-			placeholder: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Followers:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes',
-			default: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Follower:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'
+			placeholder: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Followers:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'
 		}, {
 			name: 'PictureSize',
 			indent: 1,
@@ -161,9 +157,8 @@ registerPlugin({
 			name: 'PictureWidth',
 			indent: 2,
 			title: 'Width: [in px]',
-			type: 'string',
-			placeholder: '400',
-			default: '400',
+			type: 'number',
+			placeholder: 400,
 			conditions: [
 				{ field: 'PictureSize', value: 3 }
 			]
@@ -171,9 +166,8 @@ registerPlugin({
 			name: 'PictureHeight',
 			indent: 2,
 			title: 'Height: [in px]',
-			type: 'string',
-			placeholder: '225',
-			default: '225',
+			type: 'number',
+			placeholder: 225,
 			conditions: [
 				{ field: 'PictureSize', value: 3 }
 			]
@@ -187,15 +181,13 @@ registerPlugin({
 			indent: 1,
 			title: 'Offline channel name: (%Streamer)',
 			type: 'string',
-			placeholder: '%Streamer is offline.',
-			default: '%Streamer is offline.'
+			placeholder: '%Streamer is offline.'
 		}, {
 			name: 'OnlineText',
 			indent: 1,
 			title: 'Online channel name: (%Streamer, %Viewer, %Game)',
 			type: 'string',
-			placeholder: '%Streamer (%Game) is online!',
-			default: '%Streamer (%Game) is online!'
+			placeholder: '%Streamer (%Game) is online!'
 		}, {
 			name: 'UpdateDisableOnline',
 			indent: 1,
@@ -223,8 +215,11 @@ registerPlugin({
 		}
 	}
 	// Check if values are set properly
+	if (!config.interval) config.interval = 5;
 	if (config.interval < 1) config.interval = 1;
+	if (!config.dev_latency) config.dev_latency = 100;
 	if (config.dev_latency < 0) config.dev_latency = 0;
+	if (!config.dev_timeout) config.dev_timeout = 5000;
 	if (config.dev_timeout < 1000) config.dev_timeout = 1000;
 	if (!config.dev_menu) config.dev_debug = false;
 
@@ -254,22 +249,24 @@ registerPlugin({
 		}
 		// Check individual channel settings
 		for (var i = 0; i < config.indi.length; i++) {
-			if (typeof config.indi[i].Streamername == 'undefined' || !config.indi[i].Streamername) {
+			if (!config.indi[i].Streamername) {
 				engine.log(`ERROR: No streamer name set by field ${i + 1}`);
 				continue;
 			}
-			if (typeof config.indi[i].OutputChannel == 'undefined' || !config.indi[i].OutputChannel) {
+			if (!config.indi[i].OutputChannel) {
 				engine.log(`ERROR: No streamer output channel by field ${i + 1}`);
 				continue;
 			}
+			if (!config.indi[i].PictureWidth) config.indi[i].PictureWidth = 400;
+			if (!config.indi[i].PictureHeight) config.indi[i].PictureHeight = 225;
 			var storeTTv = new TwitchStatus();
 			storeTTv.TTvChannelname = `${config.indi[i].Streamername}`;
 			storeTTv.StreamerUID = config.indi[i].StreamerUID;
 			storeTTv.ChannelID = config.indi[i].OutputChannel;
-			storeTTv.OfflineText = config.indi[i].OfflineText;
-			storeTTv.OnlineText = config.indi[i].OnlineText;
-			storeTTv.Description = config.indi[i].description;
-			storeTTv.PicReplace = config.indi[i].PicReplace;
+			(!config.indi[i].OfflineText) ? storeTTv.OfflineText = '%Streamer is offline.' : storeTTv.OfflineText = config.indi[i].OfflineText;
+			(!config.indi[i].OnlineText) ? storeTTv.OnlineText = '%Streamer (%Game) is online!' : storeTTv.OnlineText = config.indi[i].OnlineText;
+			(!config.indi[i].description) ? storeTTv.Description = '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Follower:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'	: storeTTv.Description = config.indi[i].description;
+			(!config.indi[i].PicReplace) ? storeTTv.PicReplace = "0" : storeTTv.PicReplace = config.indi[i].PicReplace;
 			storeTTv.Picture = new Picture(config.indi[i].PictureSize, config.indi[i].PictureWidth, config.indi[i].PictureHeight);
 			storeTTv.UpdateDisableOnline = config.indi[i].UpdateDisableOnline;
 			storeTTv.IsOnline = false;
@@ -430,7 +427,7 @@ event.on('chat', function (ev) {
 			// LIVE-Group:  Checking if still has LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (hasServerGroupWithId(user, config.StreamerGrID)) {
+					if (hasServerGroupWithId(user, config.StreamerGrID.toString())) {
 						user.removeFromServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
 					}
@@ -505,7 +502,7 @@ event.on('chat', function (ev) {
 			// LIVE-Group:  Checking if yet missing the LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (!hasServerGroupWithId(user, config.StreamerGrID)) {
+					if (!hasServerGroupWithId(user, config.StreamerGrID.toString())) {
 						user.addToServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
 					}
