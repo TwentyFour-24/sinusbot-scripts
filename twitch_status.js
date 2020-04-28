@@ -575,8 +575,8 @@ event.on('chat', function (ev) {
 		return new Promise((resolve, reject) => {
 			if (key_value.TTvChannelname == undefined) {
 				key_value.e_log[0].status = 404;
-				key_value.e_log[0].error = 'Channel not available >> wrong name?';
-				engine.log(`> ${ch_name} >> ${key_value.e_log[0].error}`);
+				key_value.e_log[0].error = 'channel not existing';
+				engine.log(`ERROR: channel NOT EXISTING >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			}
@@ -605,7 +605,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvUsersData = data;
-				if (DEBUG) engine.log(`> loading Twitch user data >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting Twitch user data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -624,8 +624,8 @@ event.on('chat', function (ev) {
 			let ch_name = key_value.TTvChannelname;
 			if (key_value.TTvUsersData.data[0] == undefined) {
 				key_value.e_log[1].status = 404;
-				key_value.e_log[1].error = 'Channel is not existing >> wrong name?';
-				engine.log(`> ${ch_name} >> ${key_value.e_log[1].error}`);
+				key_value.e_log[1].error = 'channel not existing';
+				engine.log(`ERROR: channel NOT EXISTING >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			}
@@ -654,7 +654,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvFollowerData = data;
-				if (DEBUG) engine.log(`> loading follower count >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting follower count >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -695,7 +695,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvStreamData = data;
-				if (DEBUG) engine.log(`> loading stream channel data >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting stream channel data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -715,7 +715,7 @@ event.on('chat', function (ev) {
 			if (key_value.TTvStreamData.data[0] == undefined) {
 				key_value.e_log[3].status = 200;
 				key_value.e_log[3].error = 'channel offline';
-				if (DEBUG) engine.log(`> ${ch_name} >> ${key_value.e_log[3].error}`);
+				if (DEBUG) engine.log(`> getting game names >> OFFLINE >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			}
@@ -744,7 +744,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvGameData = data;
-				if (DEBUG) engine.log(`> loading game names >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting game names >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -800,7 +800,7 @@ event.on('chat', function (ev) {
 				emotes = emotes + '\n';
 				if (emotes.length > 0) subemotes = emotes;
 				key_value.Subemotes = subemotes;
-				if (DEBUG) engine.log(`> loading SUB emotes >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting SUB emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -848,7 +848,7 @@ event.on('chat', function (ev) {
 				for (var i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
 				if (data.emotes.length > 0) Betteremotes = emotesBetter;
 				key_value.Betteremotes = Betteremotes;
-				if (DEBUG) engine.log(`> loading BTTV emotes >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> getting BTTV emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
