@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b13',
+	version: '2.0.0-b14',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -283,12 +283,12 @@ registerPlugin({
 	}
 
 //	#####################  Debug Functions  #####################
-/*event.on('chat', function (ev) {
+event.on('chat', function (ev) {
 	if (ev.text == "auth") Auth();
 });
 event.on('chat', function (ev) {
 	if (ev.text == "valid") Validate();
-});*/
+});
 //	#####################  Debug Functions  #####################
 
 	/**
@@ -334,7 +334,7 @@ event.on('chat', function (ev) {
 			e_log.forEach((arr) => {
 				if (arr.status !== 200) noError = false;
 			})
-			if (DEBUG || !noError) engine.log(`ERROR Log for ${key_value.TTvChannelname}: ${JSON.stringify(e_log)}`);
+			if (DEBUG || !noError) engine.log(`API-Status-Log: ${key_value.TTvChannelname} - ${JSON.stringify(e_log)}`);
 
 			store.setInstance(key_name, key_result);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
@@ -356,7 +356,7 @@ event.on('chat', function (ev) {
 
 		// Check if fetched data is present at all
 		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
-			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIPPED!`);
+			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIP!`);
 			return;
 		}
 		// Check if live
@@ -432,13 +432,13 @@ event.on('chat', function (ev) {
 						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
 					}
 					else {
-						if (DEBUG) engine.log(`${nick} is already not in group, skipping...`);
+						if (DEBUG) engine.log(`${nick}'s already not in group >> skip`);
 					}
 				}
 				else {
 					if (DEBUG) {
-						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on TS, skipping...`);
-						else engine.log(`Invalid UUID specified for ${nick}, skipping...`);
+						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+						else engine.log(`Invalid UUID for ${nick} >> skip`);
 					}
 				}
 			}
@@ -495,7 +495,7 @@ event.on('chat', function (ev) {
 			if (result.length >= 40) {
 				if (result2.length >= 40) {
 					result = `${result2.substring(0, 37)}...`;
-					engine.log("WARNING: data too long > 40... Trying to shorten though. You may have problems while using this channel name.");
+					engine.log("WARNING: Name too long > 40... Trying to shorten, you may still have problems while using this channel name.");
 				}
 				else result = result2;
 			}
@@ -507,13 +507,13 @@ event.on('chat', function (ev) {
 						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
 					}
 					else {
-						if (DEBUG) engine.log(`${nick} is already in group, skipping...`);
+						if (DEBUG) engine.log(`${nick}'s already in group >> skip`);
 					}
 				}
 				else {
 					if (DEBUG) {
-						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on TS, skipping...`);
-						else engine.log(`Invalid UUID specified for ${nick}, skipping...`);
+						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+						else engine.log(`Invalid UUID for ${nick} >> skip`);
 					}
 				}
 			}
@@ -542,8 +542,10 @@ event.on('chat', function (ev) {
 		resultdesc = resultdesc.substr(0, 7196);
 		if (resultdesc.length == 7196) resultdesc = resultdesc.substr(0, resultdesc.lastIndexOf('[img]')) + '\n[b]exceeded limit[/b]';
 		// Combined channel update to reduce server log spam
-		if ((result != ch.name()) || (resultdesc != ch.description())) ch.update({ name: result, description: resultdesc });
-		if (DEBUG) engine.log(`Updating ${nick}'s channel! Check manually whether successful...`);
+		if ((result != ch.name()) || (resultdesc != ch.description())) {
+			ch.update({ name: result, description: resultdesc });
+			if (DEBUG) engine.log(`Updated ${nick}'s channel! Confirm manually whether successful...`);
+		}
 		// Tag as Online to skip multiple updates if setting is ON
 		if (live) {
 			key_value.IsOnline = true;
@@ -603,7 +605,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvUsersData = data;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Twitch User Data... DONE!`);
+				if (DEBUG) engine.log(`> loading Twitch user data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -652,7 +654,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvFollowerData = data;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Follower Count Data... DONE!`);
+				if (DEBUG) engine.log(`> loading follower count >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -693,7 +695,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvStreamData = data;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Stream Channel Data... DONE!`);
+				if (DEBUG) engine.log(`> loading stream channel data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -712,7 +714,7 @@ event.on('chat', function (ev) {
 			let ch_name = key_value.TTvChannelname;
 			if (key_value.TTvStreamData.data[0] == undefined) {
 				key_value.e_log[3].status = 200;
-				key_value.e_log[3].error = 'Channel offline >> no game!';
+				key_value.e_log[3].error = 'channel offline';
 				if (DEBUG) engine.log(`> ${ch_name} >> ${key_value.e_log[3].error}`);
 				resolve(key_value);
 				return;
@@ -742,7 +744,7 @@ event.on('chat', function (ev) {
 					return;
 				}
 				key_value.TTvGameData = data;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> Game Name Data... DONE!`);
+				if (DEBUG) engine.log(`> loading game names >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -757,7 +759,7 @@ event.on('chat', function (ev) {
 		return new Promise((resolve, reject) => {
 			if (firstRun && !config.instantEmotes) {
 				key_value.e_log[4].status = 200;
-				key_value.e_log[4].error = 'First run >> no SUB-Emotes';
+				key_value.e_log[4].error = 'initial run';
 				resolve(key_value);
 				return;
 			}
@@ -798,7 +800,7 @@ event.on('chat', function (ev) {
 				emotes = emotes + '\n';
 				if (emotes.length > 0) subemotes = emotes;
 				key_value.Subemotes = subemotes;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> SUB Emote Data... DONE!`);
+				if (DEBUG) engine.log(`> loading SUB emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -813,7 +815,7 @@ event.on('chat', function (ev) {
 		return new Promise((resolve, reject) => {
 			if ((firstRun && !config.instantEmotes) || !config.EnableBTTV) {
 				key_value.e_log[5].status = 200;
-				key_value.e_log[5].error = 'First run or disabled >> no BTTV-Emotes';
+				key_value.e_log[5].error = 'disabled/initial run';
 				resolve(key_value);
 				return;
 			}
@@ -846,7 +848,7 @@ event.on('chat', function (ev) {
 				for (var i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
 				if (data.emotes.length > 0) Betteremotes = emotesBetter;
 				key_value.Betteremotes = Betteremotes;
-				if (DEBUG) engine.log(`> ${ch_name} >> downloading >>> BTTV Emote Data... DONE!`);
+				if (DEBUG) engine.log(`> loading BTTV emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -864,12 +866,12 @@ event.on('chat', function (ev) {
 		}, (error, response) => {
 			if (response == undefined) return;
 			if (response.statusCode != 200) {
-				engine.log('Exceeded Twitch API-Rate limit... please try later!');
+				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
 				return;
 			}
 			let data = JSON.parse(response.data);
 			TOKEN = data.access_token;
-			/*if (DEBUG) */engine.log('API-Token Authentification successful!');
+			/*if (DEBUG) */engine.log('>> API-Token authentification successful!');
 		});
 	}
 	/**
@@ -884,22 +886,22 @@ event.on('chat', function (ev) {
 		}, (error, response) => {
 			if (response == undefined) return;
 			if (response.statusCode != 200) {
-				engine.log('Surpassed Twitch API-Rate limit... please try later!');
+				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
 				return;
 			}
 			let data = JSON.parse(response.data);
 			if (response.statusCode == 401) {
 				if (data.message == "missing authorization token") {
-					engine.log('Missing auth token, please re-authenticate!');
+					engine.log('ERROR: Missing auth token, please re-authenticate!');
 					return;
 				}
 				if (data.message == "invalid access token") {
-					engine.log('Invalid access token, please re-authenticate!');
+					engine.log('ERROR: Invalid access token, please re-authenticate!');
 					return;
 				}
 			}
 			TOKEN = data.access_token;
-			/*if (DEBUG) */engine.log('API-Token Validation successful!');
+			/*if (DEBUG) */engine.log('>> API-Token validation successful!');
 		});
 	}
 //	###########################################  API-Functions  ###########################################
