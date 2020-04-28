@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Anti-Solitary-Clients',
-	version: '1.2.0',
+	version: '1.2.1',
 	engine: '>= 1.0.0',
 	description: 'Move or punish solitary clients ( being alone in a channel ) after a specific time.',
 	author: 'TwentyFour',
@@ -227,36 +227,42 @@ registerPlugin({
 					DBtoMatch = iso[toID];
 				}
 			}
+			var fromChannel = backend.getChannelByID(fromID);
 			// If move came from isolated channel >> REMOVE
 			if (DBfromMatch) {
-				if (backend.getChannelByID(fromID).getClientCount() !== 1) {
-					iso[fromID] = null;
+				if (fromChannel) {
+					if (fromChannel.getClientCount() !== 1) iso[fromID] = null;
 				}
 			}
 			// Is fromChannel now an isolated channel? >> ADD
 			else {
 				if (fromID) {
-					if (backend.getChannelByID(fromID).getClientCount() == 1) {
-						iso[fromID] = {
-							user: EVfromChannel.getClients()[0].id(),
-							since: Date.now()
+					if (fromChannel) {
+						if (fromChannel.getClientCount() == 1) {
+							iso[fromID] = {
+								user: EVfromChannel.getClients()[0].id(),
+								since: Date.now()
+							}
 						}
 					}
 				}
 			}
+			var toChannel = backend.getChannelByID(toID);
 			// If move made channel non-isolated >> REMOVE
 			if (DBtoMatch) {
-				if (backend.getChannelByID(toID).getClientCount() !== 1) {
-					iso[toID] = null;
+				if (toChannel) {
+					if (toChannel.getClientCount() !== 1) iso[toID] = null;			
 				}
 			}
 			// Is toChannel now an isolated channel? >> ADD
 			else {
 				if (toID) {
-					if (backend.getChannelByID(toID).getClientCount() == 1) {
-						iso[toID] = {
-							user: EVtoChannel.getClients()[0].id(),
-							since: Date.now()
+					if (toChannel) {
+						if (toChannel.getClientCount() == 1) {
+							iso[toID] = {
+								user: EVtoChannel.getClients()[0].id(),
+								since: Date.now()
+							}
 						}
 					}
 				}
@@ -478,7 +484,7 @@ registerPlugin({
  */
 	function addServerGroup(client, groupId) {
 		if (client != undefined) {
-			if (!hasServerGroupWithId(client, groupId)) {
+			if (!hasServerGroupWithId(client, groupId.toString())) {
 				client.addToServerGroup(groupId);
 				if (DEBUG) engine.log(`${meta.name} >> Added pushish group to ${client.name()}.`);
 			}
