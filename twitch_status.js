@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b15',
+	version: '2.0.0-RC1',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -229,7 +229,7 @@ registerPlugin({
 	const APISECRET = config.twitch_apisecret;
 	const LATENCY = Math.floor(config.dev_latency);
 	const TIMEOUT = Math.floor(config.dev_timeout);
-	const E_LOG = [{ "error" : null, "status" : null }, { "error" : null, "status" : null }, { "error" : null, "status" : null }, { "error" : null, "status" : null }, { "error" : null, "status" : null }, { "error" : null, "status" : null }];
+	const E_LOG = [{ "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }];
 	var TOKEN = "";
 
 	/**
@@ -273,32 +273,38 @@ registerPlugin({
 	}
 
 //	#####################  Debug Functions  #####################
-event.on('chat', function (ev) {
-	if (ev.text == "auth") Auth();
-});
-event.on('chat', function (ev) {
-	if (ev.text == "valid") Validate();
-});
+	event.on('chat', function (ev) {
+		if (ev.text == "valid") Validate();
+	});
 //	#####################  Debug Functions  #####################
 
 	/**
 	 * Initialising the cycles
 	 */
 	function Run() {
-		if (DEBUG) engine.log('Started fresh update cycle...');
-
-		for (var j = 0; j < store.getKeysInstance().length; j++) {
-			FetchData(`TTvData_${j}`);
-		}
+		if (DEBUG) engine.log('Started new update cycle!');
+		Auth()
+		.then(result => {
+			if (result == 'retry') {
+				engine.log(`>> Retrying authentification next cycle...`);
+				return;
+			}
+			for (var j = 0; j < store.getKeysInstance().length; j++) {
+				FetchData(`TTvData_${j}`);
+			}
+		},
+		error => {
+			READY = false;
+			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`);
+		})
 	}
 	/**
 	 * Cycle once through all APIs and save their data
 	 * @param {string} key_name		stored key string of a "Channel"
 	 */
 	function FetchData(key_name) {
-		let READY = true;
-		if (!backend.isConnected() || (typeof store.getInstance(key_name).TTvChannelname) == 'undefined') READY = false;
 		if (!READY) return;
+		if (!backend.isConnected() || (typeof store.getInstance(key_name).TTvChannelname) == 'undefined') return;
 
 		let key_value = store.getInstance(key_name);
 		key_value.e_log = E_LOG;
@@ -317,17 +323,19 @@ event.on('chat', function (ev) {
 		.then(sleeper(LATENCY))
 		.then(key_result => {
 			key_result.firstRun = false;
-
-			let e_log = key_result.e_log;
+			let elog = key_result.e_log;
 			let noError = true;
-			if (e_log[4].status == 404) e_log[4].status = 200;
-			e_log.forEach((arr) => {
-				if (arr.status !== 200) noError = false;
+
+			if (elog[4].status == 404) elog[4].status = 200;
+			elog.forEach((arr) => {
+				if (arr.status != 200) noError = false;
 			})
-			if (DEBUG || !noError) engine.log(`API-Status-Log: ${key_value.TTvChannelname} - ${JSON.stringify(e_log)}`);
+			if (DEBUG || !noError) engine.log(`API-Summary: ${key_value.TTvChannelname} - ${JSON.stringify(elog)}`);
 
 			store.setInstance(key_name, key_result);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
+			// Re-Auth if authentification failed prior
+			if (elog[0].status == 401) TOKEN = "";
 		});
 	}
 	/**
@@ -580,23 +588,21 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[0].error = 'Failed - no response';
-					resolve(key_value);
-					return;
-				}
-				key_value.e_log[0].status = response.statusCode;
-				if (response.statusCode != 200) {
+					key_value.e_log[0].status = 503;
+					key_value.e_log[0].error = 'no response';
 					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
+				key_value.e_log[0].status = response.statusCode;
 				key_value.e_log[0].error = data.error;
-				if (data.error == "Unauthorized") {
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> User Data >> FAILED >>> ${ch_name}`);
 					resolve(key_value);
 					return;
 				}
 				key_value.TTvUsersData = data;
-				if (DEBUG) engine.log(`> getting Twitch user data >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> User Data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -608,18 +614,13 @@ event.on('chat', function (ev) {
 	 */
 	function API_Followers(key_value) {
 		return new Promise((resolve, reject) => {
-			if (key_value.e_log[0].status == 404) {
+			if (key_value.e_log[0].status != 200) {
+				key_value.e_log[1].status = key_value.e_log[0].status;
+				key_value.e_log[1].error = 'failed prior';
 				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
-			if (key_value.TTvUsersData.data[0] == undefined) {
-				key_value.e_log[1].status = 404;
-				key_value.e_log[1].error = 'channel not existing';
-				engine.log(`ERROR: channel NOT EXISTING >>> ${ch_name}`);
-				resolve(key_value);
-				return;
-			}
 			let user_id = key_value.TTvUsersData.data[0].id;
 			http.simpleRequest({
 				method: "GET",
@@ -629,23 +630,21 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[1].error = 'Failed - no response';
-					resolve(key_value);
-					return;
-				}
-				key_value.e_log[1].status = response.statusCode;
-				if (response.statusCode != 200) {
+					key_value.e_log[1].status = 503;
+					key_value.e_log[1].error = 'no response';
 					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
+				key_value.e_log[1].status = response.statusCode;
 				key_value.e_log[1].error = data.error;
-				if (data.error == "Unauthorized") {
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> Follower Count >> FAILED >>> ${ch_name}`);
 					resolve(key_value);
 					return;
 				}
 				key_value.TTvFollowerData = data;
-				if (DEBUG) engine.log(`> getting follower count >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> Follower Count >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -657,7 +656,9 @@ event.on('chat', function (ev) {
 	 */
 	function API_Streams(key_value) {
 		return new Promise((resolve, reject) => {
-			if (key_value.e_log[0].status == 404) {
+			if (key_value.e_log[1].status != 200) {
+				key_value.e_log[2].status = key_value.e_log[1].status;
+				key_value.e_log[2].error = 'failed prior';
 				resolve(key_value);
 				return;
 			}
@@ -670,23 +671,21 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[2].error = 'Failed - no response';
-					resolve(key_value);
-					return;
-				}
-				key_value.e_log[2].status = response.statusCode;
-				if (response.statusCode != 200) {
+					key_value.e_log[2].status = 503;
+					key_value.e_log[2].error = 'no response';
 					resolve(key_value);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
+				key_value.e_log[2].status = response.statusCode;
 				key_value.e_log[2].error = data.error;
-				if (data.error == "Unauthorized") {
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> Channel Data >> FAILED >>> ${ch_name}`);
 					resolve(key_value);
 					return;
 				}
 				key_value.TTvStreamData = data;
-				if (DEBUG) engine.log(`> getting stream channel data >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> Channel Data >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -698,15 +697,17 @@ event.on('chat', function (ev) {
 	 */
 	function API_Games(key_value) {
 		return new Promise((resolve, reject) => {
-			if (key_value.e_log[0].status == 404) {
+			if (key_value.e_log[2].status != 200) {
+				key_value.e_log[3].status = key_value.e_log[2].status;
+				key_value.e_log[3].error = 'failed prior';
 				resolve(key_value);
 				return;
 			}
 			let ch_name = key_value.TTvChannelname;
-			if (key_value.TTvStreamData.data[0] == undefined) {
+			if (key_value.TTvStreamData == "" || key_value.TTvStreamData.data[0] == undefined) {
 				key_value.e_log[3].status = 200;
 				key_value.e_log[3].error = 'channel offline';
-				if (DEBUG) engine.log(`> getting game names >> OFFLINE >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> Game Title >> OFFLINE >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			}
@@ -719,23 +720,21 @@ event.on('chat', function (ev) {
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[3].error = 'Failed - no response';
+					key_value.e_log[3].status = 503;
+					key_value.e_log[3].error = 'no response';
 					resolve(key_value);
 					return;
-				}
-				key_value.e_log[3].status = response.statusCode;
-				if (response.statusCode != 200) {
-					resolve(key_value);
-					return;
-				}
+				}				
 				let data = JSON.parse(response.data.toString());
+				key_value.e_log[3].status = response.statusCode;
 				key_value.e_log[3].error = data.error;
-				if (data.error == "Unauthorized") {
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> Game Title >> FAILED >>> ${ch_name}`);
 					resolve(key_value);
 					return;
 				}
 				key_value.TTvGameData = data;
-				if (DEBUG) engine.log(`> getting game names >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> Game Title >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -754,7 +753,9 @@ event.on('chat', function (ev) {
 				resolve(key_value);
 				return;
 			}
-			if (key_value.e_log[0].status == 404) {
+			if (key_value.e_log[3].status != 200) {
+				key_value.e_log[4].status = key_value.e_log[3].status;
+				key_value.e_log[4].error = 'failed prior';
 				resolve(key_value);
 				return;
 			}
@@ -769,7 +770,8 @@ event.on('chat', function (ev) {
 				timeout: TIMEOUT
 			}, (error, response) => {
 				if (response == undefined) {
-					key_value.e_log[4].error = 'Failed - no response';
+					key_value.e_log[4].status = 503;
+					key_value.e_log[4].error = 'no response';
 					resolve(key_value);
 					return;
 				}
@@ -781,7 +783,7 @@ event.on('chat', function (ev) {
 				let data = JSON.parse(response.data.toString());
 				key_value.e_log[4].error = data.error;
 				if (data.error == "Channel not found") {
-					if (DEBUG) engine.log(`API error: SUB emotes for channel ${ch_name} not found!`);
+					if (DEBUG) engine.log(`> SUB-Emotes >> FAILED >>> for channel ${ch_name} not found!`);
 					resolve(key_value);
 					return;
 				}
@@ -791,7 +793,7 @@ event.on('chat', function (ev) {
 				emotes = emotes + '\n';
 				if (emotes.length > 0) subemotes = emotes;
 				key_value.Subemotes = subemotes;
-				if (DEBUG) engine.log(`> getting SUB emotes >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> SUB-Emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -810,7 +812,9 @@ event.on('chat', function (ev) {
 				resolve(key_value);
 				return;
 			}
-			if (key_value.e_log[0].status == 404) {
+			if (key_value.e_log[3].status != 200) {
+				key_value.e_log[5].status = key_value.e_log[3].status;
+				key_value.e_log[5].error = 'failed prior';
 				resolve(key_value);
 				return;
 			}
@@ -823,13 +827,14 @@ event.on('chat', function (ev) {
 				headers: { "Content-Type": "application/json" }
 			}, (error, response) => {
 				if (response == undefined) {
-					key_value.e_log[5].error = 'Failed - no response';
+					key_value.e_log[5].status = 503;
+					key_value.e_log[5].error = 'no response';
 					resolve(key_value);
 					return;
 				}
 				key_value.e_log[5].status = response.statusCode;
 				if (response.statusCode == 404) {
-					if (DEBUG) engine.log(`API error: BTTV emotes for channel ${ch_name} not found!`);
+					if (DEBUG) engine.log(`> BTTV-Emotes >> FAILED >>> for channel ${ch_name} not found!`);
 					resolve(key_value);
 					return;
 				}
@@ -839,7 +844,7 @@ event.on('chat', function (ev) {
 				for (var i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
 				if (data.emotes.length > 0) Betteremotes = emotesBetter;
 				key_value.Betteremotes = Betteremotes;
-				if (DEBUG) engine.log(`> getting BTTV emotes >> 100% >>> ${ch_name}`);
+				if (DEBUG) engine.log(`> BTTV-Emotes >> 100% >>> ${ch_name}`);
 				resolve(key_value);
 				return;
 			});
@@ -850,19 +855,31 @@ event.on('chat', function (ev) {
 	 * Twitch-API token authentification
 	 */
 	function Auth() {
-		http.simpleRequest({
-			method: "POST",
-			url: `https://id.twitch.tv/oauth2/token?client_id=${APIKEY}&client_secret=${APISECRET}&grant_type=client_credentials`,
-			timeout: TIMEOUT
-		}, (error, response) => {
-			if (response == undefined) return;
-			if (response.statusCode != 200) {
-				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
+		return new Promise((resolve, reject) => {
+			if (TOKEN != '') {
+				resolve('already auth\'ed');
 				return;
 			}
-			let data = JSON.parse(response.data.toString());
-			TOKEN = data.access_token;
-			/*if (DEBUG) */engine.log('>> API-Token authentification successful!');
+			http.simpleRequest({
+				method: "POST",
+				url: `https://id.twitch.tv/oauth2/token?client_id=${APIKEY}&client_secret=${APISECRET}&grant_type=client_credentials`,
+				timeout: TIMEOUT
+			}, (error, response) => {
+				if (response == undefined) {
+					engine.log(`API-Error 503: no response!`);
+					resolve('retry');
+					return;
+				}
+				let data = JSON.parse(response.data.toString());
+				if (response.statusCode != 200) {
+					engine.log(`API-Error ${data.status}: ${data.message}!`);
+					reject('failed');
+					return;
+				}
+				TOKEN = data.access_token;
+				engine.log('>> API-Token authentification successful!');
+				resolve('success');
+			});
 		});
 	}
 	/**
@@ -875,24 +892,17 @@ event.on('chat', function (ev) {
 			timeout: TIMEOUT,
 			headers: { "Authorization": (`OAuth ${TOKEN}`) }
 		}, (error, response) => {
-			if (response == undefined) return;
-			let data = JSON.parse(response.data.toString());
-			if (response.statusCode == 401) {
-				if (data.message == "missing authorization token") {
-					engine.log('ERROR: Missing auth token, please re-authenticate!');
-					return;
-				}
-				if (data.message == "invalid access token") {
-					engine.log('ERROR: Invalid access token, please re-authenticate!');
-					return;
-				}
+			if (response == undefined) {
+				engine.log(`API-Error 503: no response!`);
+				return;
 			}
-			else if (response.statusCode != 200) {
-				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
+			let data = JSON.parse(response.data.toString());
+			if (response.statusCode != 200) {
+				engine.log(`API-Error ${data.status}: ${data.message}!`);
 				return;
 			}
 			TOKEN = data.access_token;
-			/*if (DEBUG) */engine.log('>> API-Token validation successful!');
+			engine.log('>> API-Token validation successful!');
 		});
 	}
 //	###########################################  API-Functions  ###########################################
@@ -959,6 +969,6 @@ event.on('chat', function (ev) {
 	 */
 	event.on('load', function (ev) {
 		if (READY) startup();
-		else engine.log(`ERROR: Missing crucial settings... Stopped ${meta.name}`)
+		else engine.log(`FATAL Error: Missing crucial settings ... Stopping ${meta.name}`)
 	});
 });
