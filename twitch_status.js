@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-b14',
+	version: '2.0.0-b15',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -238,15 +238,10 @@ registerPlugin({
 	function startup() {
 		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
 		let toDelete = store.getKeysInstance();
-		let SUCCESS = true;
 		for (var i = 0; i < toDelete.length; i++) {
-			SUCCESS = store.unsetInstance(toDelete[i]);
-			if (!SUCCESS) break;			
+			store.unsetInstance(toDelete[i]);			
 		}
-		if (DEBUG) {
-			if (SUCCESS) engine.log('Successfully deleted cache!');
-			else engine.log('Failed to delete cache!');	
-		}
+		if (DEBUG) engine.log('Successfully deleted cache!');
 		// Check individual channel settings
 		for (var i = 0; i < config.indi.length; i++) {
 			if (!config.indi[i].Streamername) {
@@ -269,11 +264,6 @@ registerPlugin({
 			(!config.indi[i].PicReplace) ? storeTTv.PicReplace = "0" : storeTTv.PicReplace = config.indi[i].PicReplace;
 			storeTTv.Picture = new Picture(config.indi[i].PictureSize, config.indi[i].PictureWidth, config.indi[i].PictureHeight);
 			storeTTv.UpdateDisableOnline = config.indi[i].UpdateDisableOnline;
-			storeTTv.IsOnline = false;
-			storeTTv.firstRun = true;
-			storeTTv.Subemotes = 'no SUB emotes';
-			storeTTv.Betteremotes = 'no BTTV emotes';
-			storeTTv.e_log = E_LOG;
 			store.setInstance("TTvData_" + i, storeTTv);
 		}
 		// Delay the initial run and start recurring cycle
@@ -351,8 +341,7 @@ event.on('chat', function (ev) {
 		var live = false;
 		var key_value = store.getInstance(key_name);
 		var ch = backend.getChannelByID(key_value.ChannelID);
-		if (key_value.StreamerUID && key_value.StreamerUID.length == 28) var user = backend.getClientByUID(key_value.StreamerUID);
-		else var user = undefined;
+		var user = (key_value.StreamerUID && key_value.StreamerUID.length == 28) ? backend.getClientByUID(key_value.StreamerUID) : undefined;
 
 		// Check if fetched data is present at all
 		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
@@ -383,6 +372,7 @@ event.on('chat', function (ev) {
 		var viewers = '';
 		var followers = '';
 		var result = '';
+		var result2 = '';
 		var resultdesc = key_value.Description;
 
 		// Exclude some function when offline, API limitations
@@ -543,6 +533,7 @@ event.on('chat', function (ev) {
 		if (resultdesc.length == 7196) resultdesc = resultdesc.substr(0, resultdesc.lastIndexOf('[img]')) + '\n[b]exceeded limit[/b]';
 		// Combined channel update to reduce server log spam
 		if ((result != ch.name()) || (resultdesc != ch.description())) {
+			// @ts-ignore
 			ch.update({ name: result, description: resultdesc });
 			if (DEBUG) engine.log(`Updated ${nick}'s channel! Confirm manually whether successful...`);
 		}
@@ -576,7 +567,7 @@ event.on('chat', function (ev) {
 			if (key_value.TTvChannelname == undefined) {
 				key_value.e_log[0].status = 404;
 				key_value.e_log[0].error = 'channel not existing';
-				engine.log(`ERROR: channel NOT EXISTING >>> ${ch_name}`);
+				engine.log(`ERROR: channel NOT EXISTING >>> check your settings!`);
 				resolve(key_value);
 				return;
 			}
@@ -598,7 +589,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[0].error = data.error;
 				if (data.error == "Unauthorized") {
 					resolve(key_value);
@@ -647,7 +638,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[1].error = data.error;
 				if (data.error == "Unauthorized") {
 					resolve(key_value);
@@ -688,7 +679,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[2].error = data.error;
 				if (data.error == "Unauthorized") {
 					resolve(key_value);
@@ -737,7 +728,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[3].error = data.error;
 				if (data.error == "Unauthorized") {
 					resolve(key_value);
@@ -787,7 +778,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[4].error = data.error;
 				if (data.error == "Channel not found") {
 					if (DEBUG) engine.log(`API error: SUB emotes for channel ${ch_name} not found!`);
@@ -842,7 +833,7 @@ event.on('chat', function (ev) {
 					resolve(key_value);
 					return;
 				}
-				let data = JSON.parse(response.data);
+				let data = JSON.parse(response.data.toString());
 				key_value.e_log[5].error = data.error;
 				let emotesBetter = '\n';
 				for (var i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
@@ -869,7 +860,7 @@ event.on('chat', function (ev) {
 				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
 				return;
 			}
-			let data = JSON.parse(response.data);
+			let data = JSON.parse(response.data.toString());
 			TOKEN = data.access_token;
 			/*if (DEBUG) */engine.log('>> API-Token authentification successful!');
 		});
@@ -885,11 +876,7 @@ event.on('chat', function (ev) {
 			headers: { "Authorization": (`OAuth ${TOKEN}`) }
 		}, (error, response) => {
 			if (response == undefined) return;
-			if (response.statusCode != 200) {
-				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
-				return;
-			}
-			let data = JSON.parse(response.data);
+			let data = JSON.parse(response.data.toString());
 			if (response.statusCode == 401) {
 				if (data.message == "missing authorization token") {
 					engine.log('ERROR: Missing auth token, please re-authenticate!');
@@ -899,6 +886,10 @@ event.on('chat', function (ev) {
 					engine.log('ERROR: Invalid access token, please re-authenticate!');
 					return;
 				}
+			}
+			else if (response.statusCode != 200) {
+				engine.log('ERROR: Exceeded Twitch API-Rate limit... please try later!');
+				return;
 			}
 			TOKEN = data.access_token;
 			/*if (DEBUG) */engine.log('>> API-Token validation successful!');
@@ -937,6 +928,19 @@ event.on('chat', function (ev) {
 			this.TTvStreamData = "";
 			this.TTvFollowerData = "0";
 			this.TTvGameData = "";
+			this.StreamerUID = "0";
+			this.ChannelID = "";
+			this.Description = "";
+			this.OfflineText = "";
+			this.OnlineText = "";
+			this.Picture = new Picture();
+			this.PicReplace = "0";
+			this.UpdateDisableOnline = false;
+			this.IsOnline = false;
+			this.firstRun = true;
+			this.Subemotes = 'no SUB emotes';
+			this.Betteremotes = 'no BTTV emotes';
+			this.e_log = E_LOG;
 		}
 		return TwitchStatus;
 	}());
