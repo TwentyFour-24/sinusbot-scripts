@@ -327,218 +327,6 @@ registerPlugin({
 			if (elog[0].status == 401) TOKEN = "";
 		});
 	}
-	/**
-	 * Edit a single channel's name & description
-	 * @param {string} key_name		of the key where to store fetched API data
-	 */
-	function UpdateChannel(key_name) {
-		if (!backend.isConnected()) return;
-		if (typeof store.getInstance(key_name).ChannelID == 'undefined') return;
-		
-		var live = false;
-		var key_value = store.getInstance(key_name);
-		var ch = backend.getChannelByID(key_value.ChannelID);
-		var user = (key_value.StreamerUID && key_value.StreamerUID.length == 28) ? backend.getClientByUID(key_value.StreamerUID) : undefined;
-
-		// Check if fetched data is present at all
-		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
-			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIP!`);
-			return;
-		}
-		// Check if live
-		if (!(key_value.TTvStreamData.data[0] == undefined)) {
-			if (key_value.TTvStreamData.data[0].type == "live") live = true;
-		}
-		else {
-			live = false;
-			key_value.IsOnline = false;
-			store.setInstance(key_name, key_value);
-		}
-
-		// Get the fetched information
-		var twitchchannel = key_value.TTvStreamData.data[0];
-		var twitchstreams = key_value.TTvUsersData.data[0];
-		var followCount = key_value.TTvFollowerData.total;
-		var gameNames = key_value.TTvGameData;
-		var nick = twitchstreams.display_name;
-		var chname = twitchstreams.login;
-		var url = `https://www.twitch.tv/${chname}`;
-		var logo = `[img]${twitchstreams.profile_image_url}[/img]`;
-		var imgshow = '';
-		var viewers = '';
-		var followers = '';
-		var result = '';
-		var result2 = '';
-		var resultdesc = key_value.Description;
-
-		// Exclude some function when offline, API limitations
-		var title = ">> offline <<";
-		var game = "N/A";
-		var uptime = title;
-		if (live) {
-			let now = Date.now();
-			let date = Date.parse(twitchchannel.started_at);
-			var diffTime = now-date;
-			let h = Math.floor(diffTime/1000/60/60);
-			let m = Math.floor((diffTime/1000/60/60 - h)*60);
-			uptime = `${h}h ${m}min`;
-			title = twitchchannel.title;
-			game = gameNames.data[0].name;
-		}
-		// Twitch-Status
-		var partner = twitchstreams.broadcaster_type;
-		switch (partner) {
-			case "partner":
-				partner = "Twitch-Partner";
-				break;
-			case "affiliate":
-				partner = "Twitch-Affiliate";
-				break;
-			default: partner = "Twitch-User";
-		}
-		// Follower
-		for (var i = 1; i <= followCount.toString().length; i++) {
-			var round = i % 3;
-			followers = followCount.toString()[followCount.toString().length - i] + followers;
-			if (round == 0 && i != followCount.toString().length) followers = `.${followers}`;
-		}
-
-		// Stream is OFFLINE
-		if (!live) {
-			viewers = "0";
-			if (key_value.PicReplace) resultdesc = resultdesc.replace('%Pic', '%Logo');
-			result = key_value.OfflineText.replace('%Streamer', nick);
-			if (result.length >= 40) result = result.substring(0, 37) + "...";
-
-			// LIVE-Group:  Checking if still has LIVE-Group
-			if (config.StreamerGrActive) {
-				if (user != undefined) {
-					if (HasServerGroupWithId(user, config.StreamerGrID.toString())) {
-						user.removeFromServerGroup(config.StreamerGrID);
-						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
-					}
-					else if (DEBUG) engine.log(`${nick}'s already not in group >> skip`);
-				}
-				else if (DEBUG) {
-					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
-					else engine.log(`Invalid UUID for ${nick} >> skip`);
-				}
-			}
-		}
-		// Stream is LIVE
-		else {
-			// Viewers with 1k dots
-			for (var i = 1; i <= twitchchannel.viewer_count.toString().length; i++) {
-				var round = i % 3;
-				viewers = twitchchannel.viewer_count.toString()[twitchchannel.viewer_count.toString().length - i] + viewers;
-				if (round == 0 && i != twitchchannel.viewer_count.toString().length) viewers = `.${viewers}`;
-			}
-
-			// Adjust pictures links
-			switch (key_value.Picture.Size) {
-				case "0":
-					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}80x45.jpg`;
-					break;
-				case "1":
-					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}320x180.jpg`;
-					break;
-				case "2":
-					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}640x360.jpg`;
-					break;
-				case "3":
-					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20) + key_value.Picture.Width}x${key_value.Picture.Height}.jpg`;
-					break;
-			}
-			imgshow = `[img]${imgshow}?${Date.now()}[/img]`;
-
-			// Shorten game titles
-			var tempStreamGame = game;
-			if (config.swapGameArray != undefined) var FoundMatchIndex = config.swapGameArray.findIndex((element) => { if (element.swapGameCheck == game) return element; });
-			else FoundMatchIndex = -1;
-			if (FoundMatchIndex != -1) {
-				var gameAfter = config.swapGameArray[FoundMatchIndex].swapGameReplace;
-				if (gameAfter != undefined) tempStreamGame = gameAfter;
-			}
-			// Replacing and limiting channel name
-			result = key_value.OnlineText
-				.replace('%Streamer', nick)
-				.replace('%Game', game)
-				.replace('%Viewer', viewers);
-			result2 = key_value.OnlineText
-				.replace('%Streamer', nick)
-				.replace('%Game', tempStreamGame)
-				.replace('%Viewer', viewers);
-			if (result.length >= 40) {
-				if (result2.length >= 40) {
-					result = `${result2.substring(0, 37)}...`;
-					engine.log("WARNING: Name too long > 40... Trying to shorten, you may still have problems while using this channel name.");
-				}
-				else result = result2;
-			}
-			// LIVE-Group:  Checking if yet missing the LIVE-Group
-			if (config.StreamerGrActive) {
-				if (user != undefined) {
-					if (!HasServerGroupWithId(user, config.StreamerGrID.toString())) {
-						user.addToServerGroup(config.StreamerGrID);
-						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
-					}
-					else if (DEBUG) engine.log(`${nick}'s already in group >> skip`);
-				}
-				else if (DEBUG) {
-					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
-					else engine.log(`Invalid UUID for ${nick} >> skip`);
-				}
-			}
-		}
-		// Replacing description
-		resultdesc = resultdesc
-			.replace('%Streamer', nick)
-			.replace('%Pic', imgshow)
-			.replace('%Title', title)
-			.replace('%Game', game)
-			.replace('%Uptime', uptime)
-			.replace('%Link', `[url]${url}[/url]`)
-			.replace('%URL', url)
-			.replace('%Follower', followers)
-			.replace('%Viewer', viewers)
-			.replace('%Status', partner)
-			.replace('%Emotes', key_value.Subemotes)
-			.replace('%Betteremotes', key_value.Betteremotes)
-			.replace('%Logo', logo);
-		// Skip update if already online
-		if (key_value.IsOnline && key_value.UpdateDisableOnline) {
-			if (DEBUG) engine.log(`${nick}'s channel won't be updated, as specified in the settings.`);
-			return;
-		}
-		// Shorten length of description to approx. maximum of 8196 byte
-		resultdesc = resultdesc.substr(0, 7196);
-		if (resultdesc.length == 7196) resultdesc = resultdesc.substr(0, resultdesc.lastIndexOf('[img]')) + '\n[b]exceeded limit[/b]';
-		// Combined channel update to reduce server log spam
-		if ((result != ch.name()) || (resultdesc != ch.description())) {
-			// @ts-ignore
-			ch.update({ name: result, description: resultdesc });
-			if (DEBUG) engine.log(`Updated ${nick}'s channel! Confirm manually whether successful...`);
-		}
-		// Tag as Online to skip multiple updates if setting is ON
-		if (live) {
-			key_value.IsOnline = true;
-			store.setInstance(key_name, key_value);
-		}
-		// Checking whether to deliver server message about going live
-		if (live && config.ServerMsgActive) {
-			var cameOnline = false;
-			var resultMsg = config.ServerMsgContent
-				.replace('%Streamer', nick)
-				.replace('%Game', game)
-				.replace('%URL', url.substr(8));
-			if (diffTime <= INTERVAL * 60000 - 20000) cameOnline = true;
-			if (cameOnline) {
-				if (config.flamboyantMode) resultMsg = '\n\n' + resultMsg + '\n[b][/b]';
-				backend.chat(resultMsg);
-				if (DEBUG) engine.log(`${nick} started streaming >> server message sent!`);
-			}
-		}
-	}
 //	###########################################  API-Functions  ###########################################
 	/**
 	 * Download the basic JSON data for the channel
@@ -854,6 +642,219 @@ registerPlugin({
 				resolve('success');
 			});
 		});
+	}
+//	##########################################  / API-Functions  ##########################################
+	/**
+	 * Edit a single channel's name & description
+	 * @param {string} key_name		of the key where to store fetched API data
+	 */
+	function UpdateChannel(key_name) {
+		if (!backend.isConnected()) return;
+		if (typeof store.getInstance(key_name).ChannelID == 'undefined') return;
+		
+		var live = false;
+		var key_value = store.getInstance(key_name);
+		var ch = backend.getChannelByID(key_value.ChannelID);
+		var user = (key_value.StreamerUID && key_value.StreamerUID.length == 28) ? backend.getClientByUID(key_value.StreamerUID) : undefined;
+
+		// Check if fetched data is present at all
+		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
+			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIP!`);
+			return;
+		}
+		// Check if live
+		if (!(key_value.TTvStreamData.data[0] == undefined)) {
+			if (key_value.TTvStreamData.data[0].type == "live") live = true;
+		}
+		else {
+			live = false;
+			key_value.IsOnline = false;
+			store.setInstance(key_name, key_value);
+		}
+
+		// Get the fetched information
+		var twitchchannel = key_value.TTvStreamData.data[0];
+		var twitchstreams = key_value.TTvUsersData.data[0];
+		var followCount = key_value.TTvFollowerData.total;
+		var gameNames = key_value.TTvGameData;
+		var nick = twitchstreams.display_name;
+		var chname = twitchstreams.login;
+		var url = `https://www.twitch.tv/${chname}`;
+		var logo = `[img]${twitchstreams.profile_image_url}[/img]`;
+		var imgshow = '';
+		var viewers = '';
+		var followers = '';
+		var result = '';
+		var result2 = '';
+		var resultdesc = key_value.Description;
+
+		// Exclude some function when offline, API limitations
+		var title = ">> offline <<";
+		var game = "N/A";
+		var uptime = title;
+		if (live) {
+			let now = Date.now();
+			let date = Date.parse(twitchchannel.started_at);
+			var diffTime = now-date;
+			let h = Math.floor(diffTime/1000/60/60);
+			let m = Math.floor((diffTime/1000/60/60 - h)*60);
+			uptime = `${h}h ${m}min`;
+			title = twitchchannel.title;
+			game = gameNames.data[0].name;
+		}
+		// Twitch-Status
+		var partner = twitchstreams.broadcaster_type;
+		switch (partner) {
+			case "partner":
+				partner = "Twitch-Partner";
+				break;
+			case "affiliate":
+				partner = "Twitch-Affiliate";
+				break;
+			default: partner = "Twitch-User";
+		}
+		// Follower
+		for (var i = 1; i <= followCount.toString().length; i++) {
+			var round = i % 3;
+			followers = followCount.toString()[followCount.toString().length - i] + followers;
+			if (round == 0 && i != followCount.toString().length) followers = `.${followers}`;
+		}
+
+		// Stream is OFFLINE
+		if (!live) {
+			viewers = "0";
+			if (key_value.PicReplace) resultdesc = resultdesc.replace('%Pic', '%Logo');
+			result = key_value.OfflineText.replace('%Streamer', nick);
+			if (result.length >= 40) result = result.substring(0, 37) + "...";
+
+			// LIVE-Group:  Checking if still has LIVE-Group
+			if (config.StreamerGrActive) {
+				if (user != undefined) {
+					if (HasServerGroupWithId(user, config.StreamerGrID.toString())) {
+						user.removeFromServerGroup(config.StreamerGrID);
+						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
+					}
+					else if (DEBUG) engine.log(`${nick}'s already not in group >> skip`);
+				}
+				else if (DEBUG) {
+					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+					else engine.log(`Invalid UUID for ${nick} >> skip`);
+				}
+			}
+		}
+		// Stream is LIVE
+		else {
+			// Viewers with 1k dots
+			for (var i = 1; i <= twitchchannel.viewer_count.toString().length; i++) {
+				var round = i % 3;
+				viewers = twitchchannel.viewer_count.toString()[twitchchannel.viewer_count.toString().length - i] + viewers;
+				if (round == 0 && i != twitchchannel.viewer_count.toString().length) viewers = `.${viewers}`;
+			}
+
+			// Adjust pictures links
+			switch (key_value.Picture.Size) {
+				case "0":
+					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}80x45.jpg`;
+					break;
+				case "1":
+					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}320x180.jpg`;
+					break;
+				case "2":
+					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20)}640x360.jpg`;
+					break;
+				case "3":
+					imgshow = `${twitchchannel.thumbnail_url.substring(0, twitchchannel.thumbnail_url.length - 20) + key_value.Picture.Width}x${key_value.Picture.Height}.jpg`;
+					break;
+			}
+			imgshow = `[img]${imgshow}?${Date.now()}[/img]`;
+
+			// Shorten game titles
+			var tempStreamGame = game;
+			if (config.swapGameArray != undefined) var FoundMatchIndex = config.swapGameArray.findIndex((element) => { if (element.swapGameCheck == game) return element; });
+			else FoundMatchIndex = -1;
+			if (FoundMatchIndex != -1) {
+				var gameAfter = config.swapGameArray[FoundMatchIndex].swapGameReplace;
+				if (gameAfter != undefined) tempStreamGame = gameAfter;
+			}
+			// Replacing and limiting channel name
+			result = key_value.OnlineText
+				.replace('%Streamer', nick)
+				.replace('%Game', game)
+				.replace('%Viewer', viewers);
+			result2 = key_value.OnlineText
+				.replace('%Streamer', nick)
+				.replace('%Game', tempStreamGame)
+				.replace('%Viewer', viewers);
+			if (result.length >= 40) {
+				if (result2.length >= 40) {
+					result = `${result2.substring(0, 37)}...`;
+					engine.log("WARNING: Name too long > 40... Trying to shorten, you may still have problems while using this channel name.");
+				}
+				else result = result2;
+			}
+			// LIVE-Group:  Checking if yet missing the LIVE-Group
+			if (config.StreamerGrActive) {
+				if (user != undefined) {
+					if (!HasServerGroupWithId(user, config.StreamerGrID.toString())) {
+						user.addToServerGroup(config.StreamerGrID);
+						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
+					}
+					else if (DEBUG) engine.log(`${nick}'s already in group >> skip`);
+				}
+				else if (DEBUG) {
+					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+					else engine.log(`Invalid UUID for ${nick} >> skip`);
+				}
+			}
+		}
+		// Replacing description
+		resultdesc = resultdesc
+			.replace('%Streamer', nick)
+			.replace('%Pic', imgshow)
+			.replace('%Title', title)
+			.replace('%Game', game)
+			.replace('%Uptime', uptime)
+			.replace('%Link', `[url]${url}[/url]`)
+			.replace('%URL', url)
+			.replace('%Follower', followers)
+			.replace('%Viewer', viewers)
+			.replace('%Status', partner)
+			.replace('%Emotes', key_value.Subemotes)
+			.replace('%Betteremotes', key_value.Betteremotes)
+			.replace('%Logo', logo);
+		// Skip update if already online
+		if (key_value.IsOnline && key_value.UpdateDisableOnline) {
+			if (DEBUG) engine.log(`${nick}'s channel won't be updated, as specified in the settings.`);
+			return;
+		}
+		// Shorten length of description to approx. maximum of 8196 byte
+		resultdesc = resultdesc.substr(0, 7196);
+		if (resultdesc.length == 7196) resultdesc = resultdesc.substr(0, resultdesc.lastIndexOf('[img]')) + '\n[b]exceeded limit[/b]';
+		// Combined channel update to reduce server log spam
+		if ((result != ch.name()) || (resultdesc != ch.description())) {
+			// @ts-ignore
+			ch.update({ name: result, description: resultdesc });
+			if (DEBUG) engine.log(`Updated ${nick}'s channel! Confirm manually whether successful...`);
+		}
+		// Tag as Online to skip multiple updates if setting is ON
+		if (live) {
+			key_value.IsOnline = true;
+			store.setInstance(key_name, key_value);
+		}
+		// Checking whether to deliver server message about going live
+		if (live && config.ServerMsgActive) {
+			var cameOnline = false;
+			var resultMsg = config.ServerMsgContent
+				.replace('%Streamer', nick)
+				.replace('%Game', game)
+				.replace('%URL', url.substr(8));
+			if (diffTime <= INTERVAL * 60000 - 20000) cameOnline = true;
+			if (cameOnline) {
+				if (config.flamboyantMode) resultMsg = '\n\n' + resultMsg + '\n[b][/b]';
+				backend.chat(resultMsg);
+				if (DEBUG) engine.log(`${nick} started streaming >> server message sent!`);
+			}
+		}
 	}
 	/**
 	 * Auxiliary function to check for a servergroup
