@@ -238,9 +238,7 @@ registerPlugin({
 	function startup() {
 		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
 		let toDelete = store.getKeysInstance();
-		for (var i = 0; i < toDelete.length; i++) {
-			store.unsetInstance(toDelete[i]);			
-		}
+		for (var i = 0; i < toDelete.length; i++) store.unsetInstance(toDelete[i]);
 		if (DEBUG) engine.log('Successfully deleted cache!');
 		// Check individual channel settings
 		for (var i = 0; i < config.indi.length; i++) {
@@ -271,13 +269,6 @@ registerPlugin({
 		setTimeout(Run, 5000);
 		setInterval(Run, INTERVAL * 60000);
 	}
-
-//	#####################  Debug Functions  #####################
-	event.on('chat', function (ev) {
-		if (ev.text == "valid") Validate();
-	});
-//	#####################  Debug Functions  #####################
-
 	/**
 	 * Initialising the cycles
 	 */
@@ -289,14 +280,10 @@ registerPlugin({
 				engine.log(`>> Retrying authentification next cycle...`);
 				return;
 			}
-			for (var j = 0; j < store.getKeysInstance().length; j++) {
-				FetchData(`TTvData_${j}`);
-			}
+			for (var j = 0; j < store.getKeysInstance().length; j++) FetchData(`TTvData_${j}`);
 		},
-		error => {
-			READY = false;
-			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`);
-		})
+		error => { READY = false;
+			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`); })
 	}
 	/**
 	 * Cycle once through all APIs and save their data
@@ -310,22 +297,21 @@ registerPlugin({
 		let game_error = '';
 		key_init.e_log = E_LOG;
 
+		// Chaining all the shit together
 		API_Users(key_init)
-		.then(sleeper(LATENCY))
+		.then(Sleeper(LATENCY))
 		.then(key_result => API_Followers(key_result))
-		.then(sleeper(LATENCY))
+		.then(Sleeper(LATENCY))
 		.then(key_result => API_Streams(key_result))
-		.then(sleeper(LATENCY))
+		.then(Sleeper(LATENCY))
 		.then(key_result => API_Games(key_result))
-		.then(sleeper(LATENCY))
-		.then(key_result => {							// No idea why this workaroudn is needed to preserve info whether channel is offline
-			game_error = key_result.e_log[3].error;
-			return key_result;
-		})
+		.then(Sleeper(LATENCY))
+		.then(key_result => { game_error = key_result.e_log[3].error;
+			return key_result; })			// No idea why this workaroudn is needed to preserve info whether channel is offline
 		.then(key_result => API_SubEmotes(key_result, key_init.firstRun))
-		.then(sleeper(LATENCY))
+		.then(Sleeper(LATENCY))
 		.then(key_result => API_BetterEmotes(key_result, key_init.firstRun))
-		.then(sleeper(LATENCY))
+		.then(Sleeper(LATENCY))
 		.then(key_final => {
 			let elog = key_final.e_log;
 			let noError = true;
@@ -333,11 +319,8 @@ registerPlugin({
 
 			if (elog[4].status == 404) elog[4].status = 200;
 			elog[3].error = game_error;
-			elog.forEach((arr) => {
-				if (arr.status != 200) noError = false;
-			})
+			elog.forEach((arr) => { if (arr.status != 200) noError = false;	})
 			if (DEBUG || !noError) engine.log(`API-Summary: ${key_final.TTvChannelname} - ${JSON.stringify(elog)}`);
-
 			store.setInstance(key_name, key_final);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
 			// Re-Auth if authentification failed prior
@@ -377,7 +360,6 @@ registerPlugin({
 		var twitchstreams = key_value.TTvUsersData.data[0];
 		var followCount = key_value.TTvFollowerData.total;
 		var gameNames = key_value.TTvGameData;
-
 		var nick = twitchstreams.display_name;
 		var chname = twitchstreams.login;
 		var url = `https://www.twitch.tv/${chname}`;
@@ -431,19 +413,15 @@ registerPlugin({
 			// LIVE-Group:  Checking if still has LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (hasServerGroupWithId(user, config.StreamerGrID.toString())) {
+					if (HasServerGroupWithId(user, config.StreamerGrID.toString())) {
 						user.removeFromServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Removed ${nick}'s OnlineGroup`);
 					}
-					else {
-						if (DEBUG) engine.log(`${nick}'s already not in group >> skip`);
-					}
+					else if (DEBUG) engine.log(`${nick}'s already not in group >> skip`);
 				}
-				else {
-					if (DEBUG) {
-						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
-						else engine.log(`Invalid UUID for ${nick} >> skip`);
-					}
+				else if (DEBUG) {
+					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+					else engine.log(`Invalid UUID for ${nick} >> skip`);
 				}
 			}
 		}
@@ -475,14 +453,8 @@ registerPlugin({
 
 			// Shorten game titles
 			var tempStreamGame = game;
-			if (config.swapGameArray != undefined) {
-				var FoundMatchIndex = config.swapGameArray.findIndex(function(element){
-					if (element.swapGameCheck == game) return element;
-				});
-			}
-			else {
-				FoundMatchIndex = -1;
-			}
+			if (config.swapGameArray != undefined) var FoundMatchIndex = config.swapGameArray.findIndex((element) => { if (element.swapGameCheck == game) return element; });
+			else FoundMatchIndex = -1;
 			if (FoundMatchIndex != -1) {
 				var gameAfter = config.swapGameArray[FoundMatchIndex].swapGameReplace;
 				if (gameAfter != undefined) tempStreamGame = gameAfter;
@@ -506,19 +478,15 @@ registerPlugin({
 			// LIVE-Group:  Checking if yet missing the LIVE-Group
 			if (config.StreamerGrActive) {
 				if (user != undefined) {
-					if (!hasServerGroupWithId(user, config.StreamerGrID.toString())) {
+					if (!HasServerGroupWithId(user, config.StreamerGrID.toString())) {
 						user.addToServerGroup(config.StreamerGrID);
 						if (DEBUG) engine.log(`Added ${nick}'s OnlineGroup`);
 					}
-					else {
-						if (DEBUG) engine.log(`${nick}'s already in group >> skip`);
-					}
+					else if (DEBUG) engine.log(`${nick}'s already in group >> skip`);
 				}
-				else {
-					if (DEBUG) {
-						if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
-						else engine.log(`Invalid UUID for ${nick} >> skip`);
-					}
+				else if (DEBUG) {
+					if (key_value.StreamerUID.length == 28) engine.log(`${nick} isn't online on server >> skip`);
+					else engine.log(`Invalid UUID for ${nick} >> skip`);
 				}
 			}
 		}
@@ -856,7 +824,6 @@ registerPlugin({
 			});
 		})
 	}
-//	###########################################  API-Authentification  ###########################################
 	/**
 	 * Twitch-API token authentification
 	 */
@@ -889,41 +856,14 @@ registerPlugin({
 		});
 	}
 	/**
-	 * Twitch-API token validation
-	 */
-	function Validate() {
-		http.simpleRequest({
-			method: "GET",
-			url: "https://id.twitch.tv/oauth2/validate",
-			timeout: TIMEOUT,
-			headers: { "Authorization": (`OAuth ${TOKEN}`) }
-		}, (error, response) => {
-			if (response == undefined) {
-				engine.log(`API-Error 503: no response!`);
-				return;
-			}
-			let data = JSON.parse(response.data.toString());
-			if (response.statusCode != 200) {
-				engine.log(`API-Error ${data.status}: ${data.message}!`);
-				return;
-			}
-			TOKEN = data.access_token;
-			engine.log('>> API-Token validation successful!');
-		});
-	}
-//	###########################################  API-Functions  ###########################################
-
-	/**
 	 * Auxiliary function to check for a servergroup
 	 * @param {Client} client	to be checked
 	 * @param {string} groupId	to check for
 	 */
-	function hasServerGroupWithId(client, groupId) {
+	function HasServerGroupWithId(client, groupId) {
 		let clientsGroups = [];
-		client.getServerGroups().forEach(
-			function (group) {
-				clientsGroups.push(group.id());
-			})
+		client.getServerGroups().forEach((group) => {
+				clientsGroups.push(group.id());})
 		if(clientsGroups.indexOf(groupId) > -1) return true;
 		return false;
 	}
@@ -931,7 +871,7 @@ registerPlugin({
 	 * Delays a promise
 	 * @param {number} ms	wait time in milliseconds
 	 */
-	function sleeper(ms) {
+	function Sleeper(ms) {
 		return function(x) {
 			return new Promise(resolve => setTimeout(() => resolve(x), ms));
 		};
@@ -973,7 +913,7 @@ registerPlugin({
 	/**
 	 * Delay execution until finished loading
 	 */
-	event.on('load', function (ev) {
+	event.on('load', (_) => {
 		if (READY) startup();
 		else engine.log(`FATAL Error: Missing crucial settings ... Stopping ${meta.name}`)
 	});
