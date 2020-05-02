@@ -229,7 +229,7 @@ registerPlugin({
 	const APISECRET = config.twitch_apisecret;
 	const LATENCY = Math.floor(config.dev_latency);
 	const TIMEOUT = Math.floor(config.dev_timeout);
-	const E_LOG = [{ "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }];
+	var E_LOG = [{ "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }];
 	var TOKEN = "";
 
 	/**
@@ -306,10 +306,11 @@ registerPlugin({
 		if (!READY) return;
 		if (!backend.isConnected() || (typeof store.getInstance(key_name).TTvChannelname) == 'undefined') return;
 
-		let key_value = store.getInstance(key_name);
-		key_value.e_log = E_LOG;
+		let key_init = store.getInstance(key_name);
+		let game_error = '';
+		key_init.e_log = E_LOG;
 
-		API_Users(key_value)
+		API_Users(key_init)
 		.then(sleeper(LATENCY))
 		.then(key_result => API_Followers(key_result))
 		.then(sleeper(LATENCY))
@@ -317,22 +318,27 @@ registerPlugin({
 		.then(sleeper(LATENCY))
 		.then(key_result => API_Games(key_result))
 		.then(sleeper(LATENCY))
-		.then(key_result => API_SubEmotes(key_result, key_value.firstRun))
+		.then(key_result => {							// No idea why this workaroudn is needed to preserve info whether channel is offline
+			game_error = key_result.e_log[3].error;
+			return key_result;
+		})
+		.then(key_result => API_SubEmotes(key_result, key_init.firstRun))
 		.then(sleeper(LATENCY))
-		.then(key_result => API_BetterEmotes(key_result, key_value.firstRun))
+		.then(key_result => API_BetterEmotes(key_result, key_init.firstRun))
 		.then(sleeper(LATENCY))
-		.then(key_result => {
-			key_result.firstRun = false;
-			let elog = key_result.e_log;
+		.then(key_final => {
+			let elog = key_final.e_log;
 			let noError = true;
+			key_final.firstRun = false;
 
 			if (elog[4].status == 404) elog[4].status = 200;
+			elog[3].error = game_error;
 			elog.forEach((arr) => {
 				if (arr.status != 200) noError = false;
 			})
-			if (DEBUG || !noError) engine.log(`API-Summary: ${key_value.TTvChannelname} - ${JSON.stringify(elog)}`);
+			if (DEBUG || !noError) engine.log(`API-Summary: ${key_final.TTvChannelname} - ${JSON.stringify(elog)}`);
 
-			store.setInstance(key_name, key_result);
+			store.setInstance(key_name, key_final);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
 			// Re-Auth if authentification failed prior
 			if (elog[0].status == 401) TOKEN = "";
@@ -571,7 +577,7 @@ registerPlugin({
 	 * @param {Object} key_value	stored object
 	 */
 	function API_Users(key_value) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if (key_value.TTvChannelname == undefined) {
 				key_value.e_log[0].status = 404;
 				key_value.e_log[0].error = 'channel not existing';
@@ -613,7 +619,7 @@ registerPlugin({
 	 * @param {Object} key_value	stored object
 	 */
 	function API_Followers(key_value) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if (key_value.e_log[0].status != 200) {
 				key_value.e_log[1].status = key_value.e_log[0].status;
 				key_value.e_log[1].error = 'failed prior';
@@ -655,7 +661,7 @@ registerPlugin({
 	 * @param {Object} key_value	stored object
 	 */
 	function API_Streams(key_value) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if (key_value.e_log[1].status != 200) {
 				key_value.e_log[2].status = key_value.e_log[1].status;
 				key_value.e_log[2].error = 'failed prior';
@@ -696,7 +702,7 @@ registerPlugin({
 	 * @param {Object} key_value	stored object
 	 */
 	function API_Games(key_value) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if (key_value.e_log[2].status != 200) {
 				key_value.e_log[3].status = key_value.e_log[2].status;
 				key_value.e_log[3].error = 'failed prior';
@@ -746,7 +752,7 @@ registerPlugin({
 	 * @param {boolean} firstRun	initial download?
 	 */
 	function API_SubEmotes(key_value, firstRun) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if (firstRun && !config.instantEmotes) {
 				key_value.e_log[4].status = 200;
 				key_value.e_log[4].error = 'initial run';
@@ -805,7 +811,7 @@ registerPlugin({
 	 * @param {boolean} firstRun	initial download?
 	 */
 	function API_BetterEmotes(key_value, firstRun) {
-		return new Promise((resolve, reject) => {
+		return new Promise(resolve => {
 			if ((firstRun && !config.instantEmotes) || !config.EnableBTTV) {
 				key_value.e_log[5].status = 200;
 				key_value.e_log[5].error = 'disabled/initial run';
