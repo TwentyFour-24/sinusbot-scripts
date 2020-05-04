@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0-RC1',
+	version: '2.0.0',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -202,7 +202,7 @@ registerPlugin({
 	const event = require('event');
 	const http = require('http');
 
-	// Verify length of Twitch ClientID and Secret
+	// Verify length of Twitch ClientID and secret
 	var READY = true;
 	if (config.twitch_apikey && config.twitch_apisecret) {
 		if (config.twitch_apikey.length !== 30) {
@@ -270,7 +270,7 @@ registerPlugin({
 		setInterval(Run, INTERVAL * 60000);
 	}
 	/**
-	 * Initialising the cycles
+	 * Recurring run of the data update cycles
 	 */
 	function Run() {
 		if (DEBUG) engine.log('Started new update cycle!');
@@ -286,8 +286,8 @@ registerPlugin({
 			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`); })
 	}
 	/**
-	 * Cycle once through all APIs and save their data
-	 * @param {string} key_name		stored key string of a "Channel"
+	 * Cycle once through all APIs, save their data and if successful, finally update the channel
+	 * @param {string} key_name		stored key string of a "Twitch-Channel"
 	 */
 	function FetchData(key_name) {
 		if (!READY) return;
@@ -307,7 +307,7 @@ registerPlugin({
 		.then(key_result => API_Games(key_result))
 		.then(Sleeper(LATENCY))
 		.then(key_result => { game_error = key_result.e_log[3].error;
-			return key_result; })			// No idea why this workaroudn is needed to preserve info whether channel is offline
+			return key_result; })			// No idea why this workaround is needed to preserve info whether channel is offline
 		.then(key_result => API_SubEmotes(key_result, key_init.firstRun))
 		.then(Sleeper(LATENCY))
 		.then(key_result => API_BetterEmotes(key_result, key_init.firstRun))
@@ -320,7 +320,21 @@ registerPlugin({
 			if (elog[4].status == 404) elog[4].status = 200;
 			elog[3].error = game_error;
 			elog.forEach((arr) => { if (arr.status != 200) noError = false;	})
-			if (DEBUG || !noError) engine.log(`API-Summary: ${key_final.TTvChannelname} - ${JSON.stringify(elog)}`);
+			// API-Summary
+			if (DEBUG || !noError) {
+				let array = ['User-Data','Follower','Stream-Data','Game','SUBemotes','BTTVemotes'];
+				let logoutput = '';
+				for (let i = 0; i < 6; i++) {
+					let error = (elog[i].error == undefined) ? '-' : elog[i].error;
+					if (elog[i].error == 'failed prior') {
+						logoutput += 'not completed';
+						break;
+					}
+					else logoutput += `${array[i]} (${elog[i].status}:${error})`;
+					if (i < 5) logoutput += ' - ';
+				}
+				engine.log(`API-Summary (${key_final.TTvChannelname}) / ${logoutput}`);
+			}
 			store.setInstance(key_name, key_final);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
 			// Re-Auth if authentification failed prior
@@ -329,7 +343,7 @@ registerPlugin({
 	}
 //	###########################################  API-Functions  ###########################################
 	/**
-	 * Download the basic JSON data for the channel
+	 * Download the basic JSON data for the Twitch-Channel
 	 * @param {Object} key_value	stored object
 	 */
 	function API_Users(key_value) {
@@ -468,7 +482,7 @@ registerPlugin({
 			let ch_name = key_value.TTvChannelname;
 			if (key_value.TTvStreamData == "" || key_value.TTvStreamData.data[0] == undefined) {
 				key_value.e_log[3].status = 200;
-				key_value.e_log[3].error = 'channel offline';
+				key_value.e_log[3].error = 'offline';
 				if (DEBUG) engine.log(`> Game Title >> OFFLINE >>> ${ch_name}`);
 				resolve(key_value);
 				return;
@@ -912,7 +926,7 @@ registerPlugin({
 	}());
 
 	/**
-	 * Delay execution until finished loading
+	 * Start only if Twitch credentials are present
 	 */
 	event.on('load', (_) => {
 		if (READY) startup();
