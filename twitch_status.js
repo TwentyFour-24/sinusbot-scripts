@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.0',
+	version: '2.0.1',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -138,7 +138,7 @@ registerPlugin({
 		}, {
 			name: 'description',
 			indent: 1,
-			title: 'Channel description: (%Streamer, %Pic ([img] not required), %Title, %Game, %Uptime, %Link (BB-Tag included), %URL, %Follower, %Viewer, %Status, %Emotes, %Betteremotes, %Logo ([img] not required))',
+			title: 'Channel description: (%Streamer, %Pic ([img] not required), %Logo ([img] not required), %Title, %Game, %Uptime, %Link (BB-Tag included), %URL, %Follower, %Viewer, %Status, %Emotes, %Betteremotes)',
 			type: 'multiline',
 			placeholder: '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Followers:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'
 		}, {
@@ -174,7 +174,7 @@ registerPlugin({
 		}, {
 			name: 'PicReplace',
 			indent: 1,
-			title: 'Show profile picture when stream is offline >> else there just won\'t be any picture!',
+			title: 'Show profile picture (%Logo replaces %Pic) when stream is offline >> else there just won\'t be any picture!',
 			type: 'checkbox'
 		}, {
 			name: 'OfflineText',
@@ -230,7 +230,7 @@ registerPlugin({
 	const LATENCY = Math.floor(config.dev_latency);
 	const TIMEOUT = Math.floor(config.dev_timeout);
 	var E_LOG = [{ "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }];
-	var TOKEN = "";
+	var TOKEN = '';
 
 	/**
 	 * Run at start-up / settings reload
@@ -672,13 +672,13 @@ registerPlugin({
 		var user = (key_value.StreamerUID && key_value.StreamerUID.length == 28) ? backend.getClientByUID(key_value.StreamerUID) : undefined;
 
 		// Check if fetched data is present at all
-		if (key_value.TTvUsersData == "" || key_value.TTvUsersData.data[0] == undefined) {
+		if (key_value.TTvUsersData == '' || key_value.TTvUsersData.data[0] == undefined) {
 			engine.log(`ERROR: Incomplete data from API for: ${key_value.TTvChannelname} >> SKIP!`);
 			return;
 		}
 		// Check if live
 		if (!(key_value.TTvStreamData.data[0] == undefined)) {
-			if (key_value.TTvStreamData.data[0].type == "live") live = true;
+			if (key_value.TTvStreamData.data[0].type == 'live') live = true;
 		}
 		else {
 			live = false;
@@ -695,17 +695,30 @@ registerPlugin({
 		var chname = twitchstreams.login;
 		var url = `https://www.twitch.tv/${chname}`;
 		var logo = `[img]${twitchstreams.profile_image_url}[/img]`;
-		var imgshow = '';
 		var viewers = '';
 		var followers = '';
 		var result = '';
 		var result2 = '';
 		var resultdesc = key_value.Description;
 
-		// Exclude some function when offline, API limitations
-		var title = ">> offline <<";
-		var game = "N/A";
+		// HERE YOU CAN CHANGE SOME OUTPUT TEXT (mostly when offline)
+		var title = '>> offline <<';
 		var uptime = title;
+		var imgshow = '';
+		var game = 'N/A';
+		var partner = twitchstreams.broadcaster_type;		// Twitch-Userstatus
+		switch (partner) {
+			case 'partner':
+				partner = 'Twitch-Partner';
+				break;
+			case 'affiliate':
+				partner = 'Twitch-Affiliate';
+				break;
+			default: partner = 'Twitch-User';
+		}
+		// HERE YOU CAN CHANGE SOME OUTPUT TEXT
+
+		// Set uptime & Game title
 		if (live) {
 			let now = Date.now();
 			let date = Date.parse(twitchchannel.started_at);
@@ -716,30 +729,18 @@ registerPlugin({
 			title = twitchchannel.title;
 			game = gameNames.data[0].name;
 		}
-		// Twitch-Status
-		var partner = twitchstreams.broadcaster_type;
-		switch (partner) {
-			case "partner":
-				partner = "Twitch-Partner";
-				break;
-			case "affiliate":
-				partner = "Twitch-Affiliate";
-				break;
-			default: partner = "Twitch-User";
-		}
 		// Follower
 		for (var i = 1; i <= followCount.toString().length; i++) {
 			var round = i % 3;
 			followers = followCount.toString()[followCount.toString().length - i] + followers;
 			if (round == 0 && i != followCount.toString().length) followers = `.${followers}`;
 		}
-
 		// Stream is OFFLINE
 		if (!live) {
-			viewers = "0";
+			viewers = '0';
 			if (key_value.PicReplace) resultdesc = resultdesc.replace('%Pic', '%Logo');
 			result = key_value.OfflineText.replace('%Streamer', nick);
-			if (result.length >= 40) result = result.substring(0, 37) + "...";
+			if (result.length >= 40) result = result.substring(0, 37) + '...';
 
 			// LIVE-Group:  Checking if still has LIVE-Group
 			if (config.StreamerGrActive) {
@@ -802,7 +803,7 @@ registerPlugin({
 			if (result.length >= 40) {
 				if (result2.length >= 40) {
 					result = `${result2.substring(0, 37)}...`;
-					engine.log("WARNING: Name too long > 40... Trying to shorten, you may still have problems while using this channel name.");
+					engine.log('WARNING: Name too long > 40... Trying to shorten, you may still have problems while using this channel name.');
 				}
 				else result = result2;
 			}
@@ -823,19 +824,19 @@ registerPlugin({
 		}
 		// Replacing description
 		resultdesc = resultdesc
-			.replace('%Streamer', nick)
-			.replace('%Pic', imgshow)
-			.replace('%Title', title)
-			.replace('%Game', game)
-			.replace('%Uptime', uptime)
-			.replace('%Link', `[url]${url}[/url]`)
-			.replace('%URL', url)
-			.replace('%Follower', followers)
-			.replace('%Viewer', viewers)
-			.replace('%Status', partner)
-			.replace('%Emotes', key_value.Subemotes)
-			.replace('%Betteremotes', key_value.Betteremotes)
-			.replace('%Logo', logo);
+			.replace(/%Streamer/gi, nick)
+			.replace(/%Pic/gi, imgshow)
+			.replace(/%Title/gi, title)
+			.replace(/%Game/gi, game)
+			.replace(/%Uptime/gi, uptime)
+			.replace(/%Link/gi, `[url]${url}[/url]`)
+			.replace(/%URL/gi, url)
+			.replace(/%Follower/gi, followers)
+			.replace(/%Viewer/gi, viewers)
+			.replace(/%Status/gi, partner)
+			.replace(/%Emotes/gi, key_value.Subemotes)
+			.replace(/%Betteremotes/gi, key_value.Betteremotes)
+			.replace(/%Logo/gi, logo);
 		// Skip update if already online
 		if (key_value.IsOnline && key_value.UpdateDisableOnline) {
 			if (DEBUG) engine.log(`${nick}'s channel won't be updated, as specified in the settings.`);
@@ -859,9 +860,9 @@ registerPlugin({
 		if (live && config.ServerMsgActive) {
 			var cameOnline = false;
 			var resultMsg = config.ServerMsgContent
-				.replace('%Streamer', nick)
-				.replace('%Game', game)
-				.replace('%URL', url.substr(8));
+				.replace(/%Streamer/gi, nick)
+				.replace(/%Game/gi, game)
+				.replace(/%URL/gi, url.substr(8));
 			if (diffTime <= INTERVAL * 60000 - 20000) cameOnline = true;
 			if (cameOnline) {
 				if (config.flamboyantMode) resultMsg = '\n\n' + resultMsg + '\n[b][/b]';
@@ -894,18 +895,18 @@ registerPlugin({
 
 	var TwitchStatus = /** @class */ (function () {
 		function TwitchStatus() {
-			this.TTvChannelname = "";
-			this.TTvUsersData = "";
-			this.TTvStreamData = "";
-			this.TTvFollowerData = "0";
-			this.TTvGameData = "";
-			this.StreamerUID = "0";
-			this.ChannelID = "";
-			this.Description = "";
-			this.OfflineText = "";
-			this.OnlineText = "";
+			this.TTvChannelname = '';
+			this.TTvUsersData = '';
+			this.TTvStreamData = '';
+			this.TTvFollowerData = '0';
+			this.TTvGameData = '';
+			this.StreamerUID = '0';
+			this.ChannelID = '';
+			this.Description = '';
+			this.OfflineText = '';
+			this.OnlineText = '';
 			this.Picture = new Picture();
-			this.PicReplace = "0";
+			this.PicReplace = '0';
 			this.UpdateDisableOnline = false;
 			this.IsOnline = false;
 			this.firstRun = true;
