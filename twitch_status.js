@@ -259,7 +259,7 @@ registerPlugin({
 			(!config.indi[i].OfflineText) ? storeTTv.OfflineText = '%Streamer is offline.' : storeTTv.OfflineText = config.indi[i].OfflineText;
 			(!config.indi[i].OnlineText) ? storeTTv.OnlineText = '%Streamer (%Game) is online!' : storeTTv.OnlineText = config.indi[i].OnlineText;
 			(!config.indi[i].description) ? storeTTv.Description = '[center][b][size=+2]%Streamer[/size][/b]\n%Pic[/center]\n[b]Title:[/b] %Title\n\n[b]Game:[/b] %Game\n[b]Uptime:[/b] %Uptime\n\n%Link\n\n[b]Viewer:[/b] %Viewer\n[b]Follower:[/b] %Follower\n[b]Status:[/b] %Status\n\n[b]Emotes:[/b] %Emotes'	: storeTTv.Description = config.indi[i].description;
-			(!config.indi[i].PicReplace) ? storeTTv.PicReplace = "0" : storeTTv.PicReplace = config.indi[i].PicReplace;
+			(!config.indi[i].PicReplace) ? storeTTv.PicReplace = false : storeTTv.PicReplace = config.indi[i].PicReplace;
 			storeTTv.Picture = new Picture(config.indi[i].PictureSize, config.indi[i].PictureWidth, config.indi[i].PictureHeight);
 			storeTTv.UpdateDisableOnline = config.indi[i].UpdateDisableOnline;
 			store.setInstance("TTvData_" + i, storeTTv);
@@ -906,7 +906,7 @@ registerPlugin({
 			this.OfflineText = '';
 			this.OnlineText = '';
 			this.Picture = new Picture();
-			this.PicReplace = '0';
+			this.PicReplace = false;
 			this.UpdateDisableOnline = false;
 			this.IsOnline = false;
 			this.firstRun = true;
