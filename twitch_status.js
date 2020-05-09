@@ -1,6 +1,6 @@
 registerPlugin({
 	name: 'Twitch Status!',
-	version: '2.0.1',
+	version: '2.0.2',
 	engine: '>= 1.0.0',
 	description: 'Syncs your channel\'s title and description periodically with your favourite twitch streamers!',
 	author: 'TwentyFour | Original Code by Filtik & Julian Huebenthal (Xuxe)',
@@ -229,7 +229,6 @@ registerPlugin({
 	const APISECRET = config.twitch_apisecret;
 	const LATENCY = Math.floor(config.dev_latency);
 	const TIMEOUT = Math.floor(config.dev_timeout);
-	var E_LOG = [{ "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }, { "status" : null, "error" : null }];
 	var TOKEN = '';
 
 	/**
@@ -238,21 +237,24 @@ registerPlugin({
 	function startup() {
 		engine.log(`Started ${meta.name} (${meta.version}) by >> @${meta.author} <<`);
 		let toDelete = store.getKeysInstance();
-		for (var i = 0; i < toDelete.length; i++) store.unsetInstance(toDelete[i]);
+		for (let i = 0; i < toDelete.length; i++) store.unsetInstance(toDelete[i]);
 		if (DEBUG) engine.log('Successfully deleted cache!');
 		// Check individual channel settings
-		for (var i = 0; i < config.indi.length; i++) {
+		let offset = 0;
+		for (let i = 0; i < config.indi.length; i++) {
 			if (!config.indi[i].Streamername) {
 				engine.log(`ERROR: No streamer name set by field ${i + 1}`);
+				offset++;
 				continue;
 			}
 			if (!config.indi[i].OutputChannel) {
 				engine.log(`ERROR: No streamer output channel by field ${i + 1}`);
+				offset++;
 				continue;
 			}
 			if (!config.indi[i].PictureWidth) config.indi[i].PictureWidth = 400;
 			if (!config.indi[i].PictureHeight) config.indi[i].PictureHeight = 225;
-			var storeTTv = new TwitchStatus();
+			let storeTTv = new TwitchStatus();
 			storeTTv.TTvChannelname = `${config.indi[i].Streamername}`;
 			storeTTv.StreamerUID = config.indi[i].StreamerUID;
 			storeTTv.ChannelID = config.indi[i].OutputChannel;
@@ -262,7 +264,9 @@ registerPlugin({
 			(!config.indi[i].PicReplace) ? storeTTv.PicReplace = false : storeTTv.PicReplace = config.indi[i].PicReplace;
 			storeTTv.Picture = new Picture(config.indi[i].PictureSize, config.indi[i].PictureWidth, config.indi[i].PictureHeight);
 			storeTTv.UpdateDisableOnline = config.indi[i].UpdateDisableOnline;
-			store.setInstance("TTvData_" + i, storeTTv);
+			store.setInstance(`TTvData_${i - offset}`, storeTTv);
+			let errorTTv = new ErrorLog();
+			store.setInstance(`TTvError_${i - offset}`, errorTTv);
 		}
 		// Delay the initial run and start recurring cycle
 		if (DEBUG) engine.log('Initial Run in 5s...');
@@ -280,82 +284,111 @@ registerPlugin({
 				engine.log(`>> Retrying authentification next cycle...`);
 				return;
 			}
-			for (var j = 0; j < store.getKeysInstance().length; j++) FetchData(`TTvData_${j}`);
+			for (let j = 0; j < (store.getKeysInstance().length)/2; j++) FetchData(`TTvData_${j}`,`TTvError_${j}`);
 		},
 		error => { READY = false;
-			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`); })
+			engine.log(`FATAL Error: API credentials rejected by Twitch ... Stopping ${meta.name}`);
+		})
 	}
 	/**
 	 * Cycle once through all APIs, save their data and if successful, finally update the channel
 	 * @param {string} key_name		stored key string of a "Twitch-Channel"
+	 * @param {string} error_name	of error object
 	 */
-	function FetchData(key_name) {
+	function FetchData(key_name, error_name) {
 		if (!READY) return;
-		if (!backend.isConnected() || (typeof store.getInstance(key_name).TTvChannelname) == 'undefined') return;
-
-		let key_init = store.getInstance(key_name);
-		let game_error = '';
-		key_init.e_log = E_LOG;
+		if (!backend.isConnected()) return;
+		// Delete API log
+		let resetlog = new ErrorLog();
+		store.setInstance(error_name, resetlog);
 
 		// Chaining all the shit together
-		API_Users(key_init)
+		API_Users(key_name, error_name)
 		.then(Sleeper(LATENCY))
-		.then(key_result => API_Followers(key_result))
+		.then(key_name => API_Followers(key_name, error_name))
 		.then(Sleeper(LATENCY))
-		.then(key_result => API_Streams(key_result))
+		.then(key_name => API_Streams(key_name, error_name))
 		.then(Sleeper(LATENCY))
-		.then(key_result => API_Games(key_result))
+		.then(key_name => API_Games(key_name, error_name))
 		.then(Sleeper(LATENCY))
-		.then(key_result => { game_error = key_result.e_log[3].error;
-			return key_result; })			// No idea why this workaround is needed to preserve info whether channel is offline
-		.then(key_result => API_SubEmotes(key_result, key_init.firstRun))
+		.then(key_name => API_SubEmotes(key_name, error_name))
 		.then(Sleeper(LATENCY))
-		.then(key_result => API_BetterEmotes(key_result, key_init.firstRun))
+		.then(key_name => API_BetterEmotes(key_name, error_name))
 		.then(Sleeper(LATENCY))
-		.then(key_final => {
-			let elog = key_final.e_log;
+		.then(key_name => {
+			let key_value = store.getInstance(key_name);
+			let error_log = store.getInstance(error_name);
 			let noError = true;
-			key_final.firstRun = false;
-
-			if (elog[4].status == 404) elog[4].status = 200;
-			elog[3].error = game_error;
-			elog.forEach((arr) => { if (arr.status != 200) noError = false;	})
-			// API-Summary
+			key_value.firstRun = false;
+			if (error_log.StatusEmote == 404) error_log.StatusEmote = 200;
+			if (error_log.StatusUser != 200 || error_log.StatusFollower != 200 || error_log.StatusStreams != 200 || error_log.StatusGames != 200 || error_log.StatusEmote != 200 || error_log.StatusBTTV != 200) noError = false;
 			if (DEBUG || !noError) {
-				let array = ['User-Data','Follower','Stream-Data','Game','SUBemotes','BTTVemotes'];
 				let logoutput = '';
 				for (let i = 0; i < 6; i++) {
-					let error = (elog[i].error == undefined) ? '-' : elog[i].error;
-					if (elog[i].error == 'failed prior') {
+					let status = '';
+					let error = '';
+					let array = ['User-Data','Follower','Stream-Data','Game','SUBemotes','BTTVemotes'];
+					switch (i) {
+						case 0:
+							status = error_log.StatusUser;
+							error = error_log.ErrorUser;
+							break;
+						case 1:
+							status = error_log.StatusFollower;
+							error = error_log.ErrorFollower;
+							break;
+						case 2:
+							status = error_log.StatusStreams;
+							error = error_log.ErrorStreams;
+							break;
+						case 3:
+							status = error_log.StatusGames;
+							error = error_log.ErrorGames;
+							break;
+						case 4:
+							status = error_log.StatusEmote;
+							error = error_log.ErrorEmote;
+							break;
+						case 5:
+							status = error_log.StatusBTTV;
+							error = error_log.ErrorBTTV;
+							break;
+					}
+					error = (error == undefined) ? '-' : error;
+					if (error == 'failed prior') {
 						logoutput += 'not completed';
 						break;
 					}
-					else logoutput += `${array[i]} (${elog[i].status}:${error})`;
+					else logoutput += `${array[i]} (${status}:${error})`;
 					if (i < 5) logoutput += ' - ';
 				}
-				engine.log(`API-Summary (${key_final.TTvChannelname}) / ${logoutput}`);
+				engine.log(`API-Summary (${key_value.TTvChannelname}) / ${logoutput}`);
 			}
-			store.setInstance(key_name, key_final);
+			store.setInstance(key_name, key_value);
 			setTimeout(() => { UpdateChannel(key_name) }, LATENCY * 2);
 			// Re-Auth if authentification failed prior
-			if (elog[0].status == 401) TOKEN = "";
+			if (error_log.StatusUser == 401) TOKEN = "";
 		});
 	}
 //	###########################################  API-Functions  ###########################################
 	/**
 	 * Download the basic JSON data for the Twitch-Channel
-	 * @param {Object} key_value	stored object
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_Users(key_value) {
+	function API_Users(key_name, error_name) {
 		return new Promise(resolve => {
-			if (key_value.TTvChannelname == undefined) {
-				key_value.e_log[0].status = 404;
-				key_value.e_log[0].error = 'channel not existing';
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			if (!key_value || !key_value.TTvChannelname) {
+				e_log.StatusUser = 400;
+				e_log.ErrorUser = 'channel not existing';
+				store.setInstance(error_name,e_log);
 				engine.log(`ERROR: channel NOT EXISTING >>> check your settings!`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			http.simpleRequest({
 				method: "GET",
 				url: `https://api.twitch.tv/helix/users?login=${ch_name}`,
@@ -364,39 +397,48 @@ registerPlugin({
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[0].status = 503;
-					key_value.e_log[0].error = 'no response';
-					resolve(key_value);
+					e_log.StatusUser = 503;
+					e_log.ErrorUser = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
+					return;
+				}
+				e_log.StatusUser = response.statusCode;
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> User Data >> FAILED >>> ${ch_name}`);
+					e_log.ErrorUser = 'channel not existing';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
-				key_value.e_log[0].status = response.statusCode;
-				key_value.e_log[0].error = data.error;
-				if (response.statusCode != 200) {
-					if (DEBUG) engine.log(`> User Data >> FAILED >>> ${ch_name}`);
-					resolve(key_value);
-					return;
-				}
+				e_log.ErrorUser = data.error;
+				store.setInstance(error_name,e_log);
 				key_value.TTvUsersData = data;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> User Data >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
 	}
 	/**
 	 * Download the current follower count
-	 * @param {Object} key_value	stored object
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_Followers(key_value) {
+	function API_Followers(key_name, error_name) {
 		return new Promise(resolve => {
-			if (key_value.e_log[0].status != 200) {
-				key_value.e_log[1].status = key_value.e_log[0].status;
-				key_value.e_log[1].error = 'failed prior';
-				resolve(key_value);
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			if (e_log.StatusUser != 200) {
+				e_log.StatusFollower = e_log.StatusUser;
+				e_log.ErrorFollower = 'failed prior';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			let user_id = key_value.TTvUsersData.data[0].id;
 			http.simpleRequest({
 				method: "GET",
@@ -406,39 +448,48 @@ registerPlugin({
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[1].status = 503;
-					key_value.e_log[1].error = 'no response';
-					resolve(key_value);
+					e_log.StatusFollower = 503;
+					e_log.ErrorFollower = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
+					return;
+				}
+				e_log.StatusFollower = response.statusCode;
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> Follower Count >> FAILED >>> ${ch_name}`);
+					e_log.ErrorFollower = 'channel not existing';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
-				key_value.e_log[1].status = response.statusCode;
-				key_value.e_log[1].error = data.error;
-				if (response.statusCode != 200) {
-					if (DEBUG) engine.log(`> Follower Count >> FAILED >>> ${ch_name}`);
-					resolve(key_value);
-					return;
-				}
+				e_log.ErrorFollower = data.error;
+				store.setInstance(error_name,e_log);
 				key_value.TTvFollowerData = data;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> Follower Count >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
 	}
 	/**
 	 * Fetch stream details (only for LIVE streams)
-	 * @param {Object} key_value	stored object
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_Streams(key_value) {
+	function API_Streams(key_name, error_name) {
 		return new Promise(resolve => {
-			if (key_value.e_log[1].status != 200) {
-				key_value.e_log[2].status = key_value.e_log[1].status;
-				key_value.e_log[2].error = 'failed prior';
-				resolve(key_value);
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			if (e_log.StatusFollower != 200) {
+				e_log.StatusStreams = e_log.StatusFollower;
+				e_log.ErrorStreams = 'failed prior';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			http.simpleRequest({
 				method: "GET",
 				url: `https://api.twitch.tv/helix/streams?user_login=${ch_name}`,
@@ -447,44 +498,54 @@ registerPlugin({
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[2].status = 503;
-					key_value.e_log[2].error = 'no response';
-					resolve(key_value);
+					e_log.StatusStreams = 503;
+					e_log.ErrorStreams = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
+					return;
+				}
+				e_log.StatusStreams = response.statusCode;
+				if (response.statusCode != 200) {
+					if (DEBUG) engine.log(`> Channel Data >> FAILED >>> ${ch_name}`);
+					e_log.ErrorStreams = 'channel not existing';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
-				key_value.e_log[2].status = response.statusCode;
-				key_value.e_log[2].error = data.error;
-				if (response.statusCode != 200) {
-					if (DEBUG) engine.log(`> Channel Data >> FAILED >>> ${ch_name}`);
-					resolve(key_value);
-					return;
-				}
+				e_log.ErrorStreams = data.error;
+				store.setInstance(error_name,e_log);
 				key_value.TTvStreamData = data;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> Channel Data >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
 	}
 	/**
 	 * Fetch game names through game IDs
-	 * @param {Object} key_value	stored object
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_Games(key_value) {
+	function API_Games(key_name, error_name) {
 		return new Promise(resolve => {
-			if (key_value.e_log[2].status != 200) {
-				key_value.e_log[3].status = key_value.e_log[2].status;
-				key_value.e_log[3].error = 'failed prior';
-				resolve(key_value);
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			if (e_log.StatusStreams != 200) {
+				e_log.StatusGames = e_log.StatusStreams;
+				e_log.ErrorGames = 'failed prior';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			if (key_value.TTvStreamData == "" || key_value.TTvStreamData.data[0] == undefined) {
-				key_value.e_log[3].status = 200;
-				key_value.e_log[3].error = 'offline';
+				e_log.StatusGames = 200;
+				e_log.ErrorGames = 'offline';
+				store.setInstance(error_name,e_log);
 				if (DEBUG) engine.log(`> Game Title >> OFFLINE >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			}
 			let game_id = key_value.TTvStreamData.data[0].game_id;
@@ -496,46 +557,56 @@ registerPlugin({
 			}, (error, response) => {
 				// ERRORS
 				if (response == undefined) {
-					key_value.e_log[3].status = 503;
-					key_value.e_log[3].error = 'no response';
-					resolve(key_value);
+					e_log.StatusGames = 503;
+					e_log.ErrorGames = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}				
-				let data = JSON.parse(response.data.toString());
-				key_value.e_log[3].status = response.statusCode;
-				key_value.e_log[3].error = data.error;
+				e_log.StatusGames = response.statusCode;
 				if (response.statusCode != 200) {
 					if (DEBUG) engine.log(`> Game Title >> FAILED >>> ${ch_name}`);
-					resolve(key_value);
+					e_log.ErrorGames = 'channel not existing';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
+				let data = JSON.parse(response.data.toString());
+				e_log.ErrorGames = data.error;
+				store.setInstance(error_name,e_log);
 				key_value.TTvGameData = data;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> Game Title >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
 	}
 	/**
 	 * Fetch subscriber emotes
-	 * @param {Object} key_value	stored object
-	 * @param {boolean} firstRun	initial download?
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_SubEmotes(key_value, firstRun) {
+	function API_SubEmotes(key_name, error_name) {
 		return new Promise(resolve => {
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			let firstRun = key_value.firstRun;
 			if (firstRun && !config.instantEmotes) {
-				key_value.e_log[4].status = 200;
-				key_value.e_log[4].error = 'initial run';
-				resolve(key_value);
+				e_log.StatusEmote = 200;
+				e_log.ErrorEmote = 'initial run';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			if (key_value.e_log[3].status != 200) {
-				key_value.e_log[4].status = key_value.e_log[3].status;
-				key_value.e_log[4].error = 'failed prior';
-				resolve(key_value);
+			if (e_log.StatusGames != 200) {
+				e_log.StatusEmote = e_log.StatusGames;
+				e_log.ErrorEmote = 'failed prior';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			let user_id = key_value.TTvUsersData.data[0].id;
 			let emotes = '';
 			let emotesSets = [];
@@ -546,55 +617,64 @@ registerPlugin({
 				timeout: TIMEOUT
 			}, (error, response) => {
 				if (response == undefined) {
-					key_value.e_log[4].status = 503;
-					key_value.e_log[4].error = 'no response';
-					resolve(key_value);
+					e_log.StatusEmote = 530;
+					e_log.ErrorEmote = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
-				key_value.e_log[4].status = response.statusCode;
+				e_log.StatusEmote = response.statusCode;
 				if (response.statusCode != 200) {
-					resolve(key_value);
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
-				key_value.e_log[4].error = data.error;
+				e_log.ErrorEmote = data.error;
+				store.setInstance(error_name,e_log);
 				if (data.error == "Channel not found") {
 					if (DEBUG) engine.log(`> SUB-Emotes >> FAILED >>> for channel ${ch_name} not found!`);
-					resolve(key_value);
+					resolve(key_name);
 					return;
 				}
-				for (var i = 0; i < data.emotes.length; i++) {
+				for (let i = 0; i < data.emotes.length; i++) {
 					if (!emotesSets.includes(data.emotes[i].emoticon_set)) emotes = emotes + '\n' + `[img]https://static-cdn.jtvnw.net/emoticons/v1/${data.emotes[i].id}/1.0[/img] ${data.emotes[i].code}`;
 				}
 				emotes = emotes + '\n';
 				if (emotes.length > 0) subemotes = emotes;
 				key_value.Subemotes = subemotes;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> SUB-Emotes >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
 	}
 	/**
 	 * Fetch BetterTTV emotes
-	 * @param {Object} key_value	stored object
-	 * @param {boolean} firstRun	initial download?
+	 * @param {Object} key_name		stored object
+	 * @param {string} error_name	of error object
 	 */
-	function API_BetterEmotes(key_value, firstRun) {
+	function API_BetterEmotes(key_name, error_name) {
 		return new Promise(resolve => {
+			let key_value = store.getInstance(key_name);
+			let e_log = store.getInstance(error_name);
+			let firstRun = key_value.firstRun;
 			if ((firstRun && !config.instantEmotes) || !config.EnableBTTV) {
-				key_value.e_log[5].status = 200;
-				key_value.e_log[5].error = 'disabled/initial run';
-				resolve(key_value);
+				e_log.StatusBTTV = 200;
+				e_log.ErrorBTTV = 'disabled/initial run';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			if (key_value.e_log[3].status != 200) {
-				key_value.e_log[5].status = key_value.e_log[3].status;
-				key_value.e_log[5].error = 'failed prior';
-				resolve(key_value);
+			if (e_log.StatusGames != 200) {
+				e_log.StatusBTTV = e_log.StatusGames;
+				e_log.ErrorBTTV = 'failed prior';
+				store.setInstance(error_name,e_log);
+				resolve(key_name);
 				return;
 			}
-			let ch_name = key_value.TTvChannelname;
+			let ch_name = (key_value) ? key_value.TTvChannelname : '';
 			let Betteremotes = 'no BTTV emotes';
 			http.simpleRequest({
 				method: "GET",
@@ -603,25 +683,29 @@ registerPlugin({
 				headers: { "Content-Type": "application/json" }
 			}, (error, response) => {
 				if (response == undefined) {
-					key_value.e_log[5].status = 503;
-					key_value.e_log[5].error = 'no response';
-					resolve(key_value);
+					e_log.StatusBTTV = 530;
+					e_log.ErrorBTTV = 'no response';
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
-				key_value.e_log[5].status = response.statusCode;
+				e_log.StatusBTTV = response.statusCode;
 				if (response.statusCode == 404) {
 					if (DEBUG) engine.log(`> BTTV-Emotes >> FAILED >>> for channel ${ch_name} not found!`);
-					resolve(key_value);
+					store.setInstance(error_name,e_log);
+					resolve(key_name);
 					return;
 				}
 				let data = JSON.parse(response.data.toString());
-				key_value.e_log[5].error = data.error;
+				e_log.ErrorBTTV = data.error;
+				store.setInstance(error_name,e_log);
 				let emotesBetter = '\n';
-				for (var i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
+				for (let i = 0; i < data.emotes.length; i++) emotesBetter = `${emotesBetter}[img]https://cdn.betterttv.net/emote/${data.emotes[i].id}/1x[/img] ${data.emotes[i].code}` + '\n';
 				if (data.emotes.length > 0) Betteremotes = emotesBetter;
 				key_value.Betteremotes = Betteremotes;
+				store.setInstance(key_name,key_value);
 				if (DEBUG) engine.log(`> BTTV-Emotes >> 100% >>> ${ch_name}`);
-				resolve(key_value);
+				resolve(key_name);
 				return;
 			});
 		})
@@ -654,6 +738,7 @@ registerPlugin({
 				TOKEN = data.access_token;
 				engine.log('>> API-Token authentification successful!');
 				resolve('success');
+				return;
 			});
 		});
 	}
@@ -730,8 +815,8 @@ registerPlugin({
 			game = gameNames.data[0].name;
 		}
 		// Follower
-		for (var i = 1; i <= followCount.toString().length; i++) {
-			var round = i % 3;
+		for (let i = 1; i <= followCount.toString().length; i++) {
+			let round = i % 3;
 			followers = followCount.toString()[followCount.toString().length - i] + followers;
 			if (round == 0 && i != followCount.toString().length) followers = `.${followers}`;
 		}
@@ -760,8 +845,8 @@ registerPlugin({
 		// Stream is LIVE
 		else {
 			// Viewers with 1k dots
-			for (var i = 1; i <= twitchchannel.viewer_count.toString().length; i++) {
-				var round = i % 3;
+			for (let i = 1; i <= twitchchannel.viewer_count.toString().length; i++) {
+				let round = i % 3;
 				viewers = twitchchannel.viewer_count.toString()[twitchchannel.viewer_count.toString().length - i] + viewers;
 				if (round == 0 && i != twitchchannel.viewer_count.toString().length) viewers = `.${viewers}`;
 			}
@@ -788,7 +873,7 @@ registerPlugin({
 			if (config.swapGameArray != undefined) var FoundMatchIndex = config.swapGameArray.findIndex((element) => { if (element.swapGameCheck == game) return element; });
 			else FoundMatchIndex = -1;
 			if (FoundMatchIndex != -1) {
-				var gameAfter = config.swapGameArray[FoundMatchIndex].swapGameReplace;
+				let gameAfter = config.swapGameArray[FoundMatchIndex].swapGameReplace;
 				if (gameAfter != undefined) tempStreamGame = gameAfter;
 			}
 			// Replacing and limiting channel name
@@ -858,8 +943,8 @@ registerPlugin({
 		}
 		// Checking whether to deliver server message about going live
 		if (live && config.ServerMsgActive) {
-			var cameOnline = false;
-			var resultMsg = config.ServerMsgContent
+			let cameOnline = false;
+			let resultMsg = config.ServerMsgContent
 				.replace(/%Streamer/gi, nick)
 				.replace(/%Game/gi, game)
 				.replace(/%URL/gi, url.substr(8));
@@ -912,9 +997,26 @@ registerPlugin({
 			this.firstRun = true;
 			this.Subemotes = 'no SUB emotes';
 			this.Betteremotes = 'no BTTV emotes';
-			this.e_log = E_LOG;
 		}
 		return TwitchStatus;
+	}());
+
+	var ErrorLog = /** @class */ (function () {
+		function ErrorLog() {
+			this.StatusUser = null;
+			this.ErrorUser = null;
+			this.StatusFollower = null;
+			this.ErrorFollower = null;
+			this.StatusStreams = null;
+			this.ErrorStreams = null;
+			this.StatusGames = null;
+			this.ErrorGames = null;
+			this.StatusEmote = null;
+			this.ErrorEmote = null;
+			this.StatusBTTV = null;
+			this.ErrorBTTV = null;
+		}
+		return ErrorLog;
 	}());
 
 	var Picture = /** @class */ (function () {
