@@ -1,12 +1,12 @@
 registerPlugin({
 	name: 'Anti-Solitary-Clients',
-	version: '1.2.1',
+	version: '1.2.2',
 	engine: '>= 1.0.0',
 	description: 'Move or punish solitary clients ( being alone in a channel ) after a specific time.',
 	author: 'TwentyFour',
 	vars: [{
 		name: 'dev_debug',
-		title: 'Show move/kick in log',
+		title: 'Enable debug log',
 		type: 'checkbox'
 	},{
 		name: 'soliTime',
@@ -156,7 +156,6 @@ registerPlugin({
 	const checkMUTE = (typeof config.mercyMute == 'undefined') ? false : config.mercyMute;
 	const checkDEAF = (typeof config.mercyDeaf == 'undefined') ? false : config.mercyDeaf;
 	const checkAWAY = (typeof config.mercyAway == 'undefined') ? false : config.mercyAway;
-	
 	const DEBUG = config.dev_debug;
 	const SOLITIME = config.soliTime;
 	const INTERVAL = config.checkTime;
@@ -166,8 +165,7 @@ registerPlugin({
 	var ready = false;
 	var iso = [];
 	var incidents = [];
-	
-	var ignoreGroups = [];
+	var ignoreGroups = config.ignoreGroups;
 	var ignoreChannel = [];
 	var checkChannel = [];
 
@@ -381,21 +379,13 @@ registerPlugin({
 				if (IGNORE_MODE == 1 && ignoreChannel.includes(id))  continue;
 				if (IGNORE_MODE == 2 && !checkChannel.includes(id))  continue;
 
-				// Exclude whitelisted server groups
-				let ignore = false;
-				let checky = backend.getClientByID(iso[id].user);
-				ignoreGroups.forEach((group) => {
-					ignore = hasServerGroupWithId(checky, group);
-				})
-				if (!ignore) {
-					// Calculate the isolation time
-					let since = iso[id].since;
-					let diff = Date.now() - since;
-					if (diff > (SOLITIME * 60000)) {
-						// if surpassed >> execute punishment
-						TakeAction(iso[id].user);
-					}
-				}
+				// Calculate the isolation time
+				let since = iso[id].since;
+				let diff = Date.now() - since;
+				if (diff > (SOLITIME * 60000)) {
+					// if surpassed >> execute punishment
+					TakeAction(iso[id].user);
+				}			
 			}
 		}
 	}
@@ -406,8 +396,17 @@ registerPlugin({
 	function TakeAction(clientID) {
 		if (!backend.isConnected()) return;
 		let user = backend.getClientByID(clientID);
+		// Exclude whitelisted server groups
+		let ignore = false;
+		ignoreGroups.forEach((group) => {
+			ignore = hasServerGroupWithId(user, group);
+		})
+		if (ignore) {
+			if (DEBUG) engine.log(`${meta.name} >> Ignored ${user.name()} due to whitelisted group.`);
+			return;
+		}
+		// Exclude by audio status
 		let skip = false;
-
 		switch (AUDIO_MODE) {
 			case 0:
 				break;
